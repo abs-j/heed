@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import "../lib.js";
 
 function boot(store, fetchImpl) {
   let listener;
@@ -58,4 +59,16 @@ test("no key: local classifier only, no network", async () => {
   const send = boot({}, ok({}));
   const r = await send({ type: "analyze", text: BAIT, ctx: { postId: "5" } });
   assert.equal(calls.length, 0); assert.ok(r.local); assert.ok(r.score >= 60);
+});
+
+test("a personalised sdModel in storage changes the local score used for routing", async () => {
+  const { SD } = globalThis;
+  const probe = "Token presale opens tonight, airdrop snapshot for whitelist wallets, claim early";
+  const votes = [
+    ...["New token launch tonight, presale is live and the airdrop snapshot is tomorrow", "Airdrop snapshot confirmed for the new token, claim before the presale ends", "This token presale is going to run, airdrop for early wallets confirmed", "Presale wallets get the airdrop, token launch is Friday, whitelist closes soon", "New airdrop token just opened its presale, whitelist spots are filling"].map((text) => ({ text, label: "slop" })),
+    ...["Fixed the flaky integration test by seeding the random generator, CI is green again", "Walked the dog in the rain and got completely soaked, worth it for the quiet", "Made a lemon cake from my grandmother's recipe and it collapsed in the middle", "Finished chapter nine, the translation of the dialogue is surprisingly hard", "Benchmarked the new parser against the old one, about 8% faster on large files"].map((text) => ({ text, label: "not_slop" }))
+  ];
+  const shipped = await boot({}, ok({}))({ type: "analyze", text: probe, ctx: { postId: "70" } });
+  const personal = await boot({ sdModel: SD.learn.refit(votes) }, ok({}))({ type: "analyze", text: probe, ctx: { postId: "71" } });
+  assert.ok(personal.score > shipped.score + 10, `shipped ${shipped.score}, personal ${personal.score}`);
 });

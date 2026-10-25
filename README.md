@@ -78,6 +78,9 @@ posts you view is sent to OpenRouter/TypeSafe for scoring. No other network acce
 - All injected UI lives in a closed shadow root (`src/content/ui.ts`), so X's CSS can't affect it.
 - `tools/harness/page.html?p=popup.html` (or `options.html`) opens those pages with sample data; `tools/harness/index.html` renders the real content script against a fake timeline (serve the repo root, e.g. `python3 -m http.server`, and open `/tools/harness/index.html`).
 
+## Learning from your votes (v2)
+Every Slop / Not slop vote retrains the on-device classifier, locally. Two mechanisms (`src/lib/learn.ts`): a **taste lexicon** of words and phrases that recur in posts you marked slop vs. kept (leave-one-out, so a vote never explains itself), and a **refit of the feature weights** pulled towards the shipped model and capped at ±1.5 per weight. Settings → Insights → *Learning from your votes* shows a cross-validated agreement score (shipped vs. learned, on posts the model hasn't trained on), a switch to turn learning off, and *Retrain now*. Needs 6 votes to start and 10 (3+ of each kind) to measure. The AI model still gets your votes as prompt examples, as before.
+
 ## Development (v2 work in progress)
 - `lib.js` and `content.js` are **generated** from `src/lib/*.ts` and `src/content/`: run `npm install && npm run build` after editing, then reload the extension.
 - Local classifier: `src/lib/features.ts` (≈40 hand-weighted features) + `src/lib/weights.json` (trained). `npm run train [backup.json]` retrains, `npm run eval` compares it with the frozen v1.5 heuristic on the seed and held-out corpora, `npm test` builds and runs everything.

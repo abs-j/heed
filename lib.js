@@ -215,6 +215,115 @@
     return FEATURES.map((f) => f.fn(c));
   }
 
+  // src/lib/learn.ts
+  var TASTE_PRIOR = 1.2;
+  var STOP = new Set("the and for are but not you your with this that have has was were from they them their its it's i'm i've don't can't just like about what when where who how all any one out get got will would could should there here then than too very also into over only some more most much many such been being does did doing our ours his her she him who whom why".split(" "));
+  function tokens(text) {
+    const clean = text.toLowerCase().replace(/https?:\/\/\S+|@\w+/g, " ");
+    const words = clean.match(/[a-z$#][a-z0-9'’$#]{2,}/g) || [];
+    const out = /* @__PURE__ */ new Set();
+    let prev = null;
+    for (const w of words) {
+      if (STOP.has(w)) {
+        prev = null;
+        continue;
+      }
+      out.add(w);
+      if (prev) out.add(prev + " " + w);
+      prev = w;
+    }
+    return out;
+  }
+  function buildLexicon(votes) {
+    const lex = { slop: {}, ok: {}, nSlop: 0, nOk: 0 };
+    for (const v of votes) {
+      const side = v.label === "slop" ? "slop" : "ok";
+      if (side === "slop") lex.nSlop++;
+      else lex.nOk++;
+      for (const t of tokens(v.text)) lex[side][t] = (lex[side][t] || 0) + 1;
+    }
+    return lex;
+  }
+  function tasteOf(text, lex, self) {
+    if (!lex) return 0;
+    const selfSlop = self === "slop" ? 1 : 0, selfOk = self === "not_slop" ? 1 : 0;
+    const nS = lex.nSlop - selfSlop, nO = lex.nOk - selfOk;
+    if (nS < 2 || nO < 2) return 0;
+    const scored = [];
+    for (const t of tokens(text)) {
+      const cs = (lex.slop[t] || 0) - selfSlop, co = (lex.ok[t] || 0) - selfOk;
+      if (cs + co < 2) continue;
+      scored.push(Math.log((cs + 1) / (nS + 2)) - Math.log((co + 1) / (nO + 2)));
+    }
+    if (!scored.length) return 0;
+    scored.sort((a, b) => Math.abs(b) - Math.abs(a));
+    return Math.tanh(scored.slice(0, 6).reduce((a, b) => a + b, 0) / 3);
+  }
+  var sigmoid = (z) => 1 / (1 + Math.exp(-z));
+  var MAX_SHIFT = 1.5;
+  function refit(votes, base, o = {}) {
+    const { epochs = 160, lr = 0.2, lambda = 0.06, voteWeight = 2 } = o;
+    const rows = votes.filter((v) => v.text && (v.label === "slop" || v.label === "not_slop"));
+    const lex = buildLexicon(rows);
+    const ids = FEATURES.map((f) => f.id);
+    const b0 = base.bias, w0 = ids.map((id, i) => base.w[id] ?? FEATURES[i].prior), t0 = base.w.taste ?? TASTE_PRIOR;
+    const data = rows.map((v) => ({
+      x: [...extract(v.text), tasteOf(v.text, lex, v.label)],
+      y: v.label === "slop" ? 1 : 0
+    }));
+    let b = b0;
+    const w = [...w0, t0];
+    const p0 = [...w0, t0];
+    const clampTo = (v, c) => Math.min(c + MAX_SHIFT, Math.max(c - MAX_SHIFT, v));
+    if (data.length >= 4) {
+      for (let e = 0; e < epochs; e++) {
+        const gw = new Array(w.length).fill(0);
+        let gb = 0;
+        for (const { x, y } of data) {
+          let z = b;
+          for (let i = 0; i < w.length; i++) z += w[i] * x[i];
+          const err = (sigmoid(z) - y) * voteWeight;
+          gb += err;
+          for (let i = 0; i < w.length; i++) gw[i] += err * x[i];
+        }
+        const n = data.length;
+        b = clampTo(b - lr * gb / n, b0);
+        for (let i = 0; i < w.length; i++) w[i] = clampTo(w[i] - lr * (gw[i] / n + lambda * (w[i] - p0[i])), p0[i]);
+      }
+    }
+    return {
+      bias: +b.toFixed(4),
+      w: { ...Object.fromEntries(ids.map((id, i) => [id, +w[i].toFixed(4)])), taste: +w[ids.length].toFixed(4) },
+      lex: pruneLexicon(lex),
+      trained: { n: rows.length, at: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) }
+    };
+  }
+  function pruneLexicon(lex) {
+    const keep = (m, other) => Object.fromEntries(Object.entries(m).filter(([t, c]) => c + (other[t] || 0) >= 2));
+    return { slop: keep(lex.slop, lex.ok), ok: keep(lex.ok, lex.slop), nSlop: lex.nSlop, nOk: lex.nOk };
+  }
+  function evaluate(votes, base, score, k = 5) {
+    const rows = votes.filter((v) => v.text && (v.label === "slop" || v.label === "not_slop"));
+    const nSlop = rows.filter((v) => v.label === "slop").length, nOk = rows.length - nSlop;
+    if (rows.length < 10 || nSlop < 3 || nOk < 3) return null;
+    const idx = rows.map((_, i) => i).sort((a, b) => a * 7919 % 101 - b * 7919 % 101);
+    const personal = new Array(rows.length);
+    for (let f = 0; f < k; f++) {
+      const test = idx.filter((_, j) => j % k === f), train = idx.filter((_, j) => j % k !== f).map((i) => rows[i]);
+      const m = refit(train, base);
+      for (const i of test) personal[i] = { y: rows[i].label === "slop" ? 1 : 0, s: score(rows[i].text, m) };
+    }
+    const shipped = rows.map((v) => ({ y: v.label === "slop" ? 1 : 0, s: score(v.text, base) }));
+    const acc = (r) => r.filter((x) => x.s >= 50 === !!x.y).length / r.length;
+    const auc = (r) => {
+      const pos = r.filter((x) => x.y), neg = r.filter((x) => !x.y);
+      let s = 0;
+      for (const p of pos) for (const n of neg) s += p.s > n.s ? 1 : p.s === n.s ? 0.5 : 0;
+      return s / (pos.length * neg.length);
+    };
+    return { n: rows.length, nSlop, nOk, shipped: { acc: acc(shipped), auc: auc(shipped) }, personal: { acc: acc(personal), auc: auc(personal) } };
+  }
+
   // src/lib/weights.json
   var weights_default = {
     bias: -0.12959442871145593,
@@ -266,7 +375,7 @@
   // src/lib/model.ts
   var priors = () => ({ bias: -1.2, w: Object.fromEntries(FEATURES.map((f) => [f.id, f.prior])) });
   var DEFAULT_WEIGHTS = weights_default?.w && Object.keys(weights_default.w).length ? weights_default : priors();
-  var sigmoid = (z) => 1 / (1 + Math.exp(-z));
+  var sigmoid2 = (z) => 1 / (1 + Math.exp(-z));
   function localScore(text, weights = DEFAULT_WEIGHTS) {
     const x = extract(text);
     let z = weights.bias;
@@ -276,7 +385,13 @@
       z += v;
       if (v > 0.35) contrib.push([f.label, v]);
     });
-    const p = sigmoid(z);
+    const taste = tasteOf(text, weights.lex);
+    if (taste) {
+      const v = (weights.w.taste ?? TASTE_PRIOR) * taste;
+      z += v;
+      if (v > 0.35) contrib.push(["resembles posts you marked slop", v]);
+    }
+    const p = sigmoid2(z);
     contrib.sort((a, b) => b[1] - a[1]);
     return { score: Math.round(p * 100), p, hits: contrib.slice(0, 5).map((c) => c[0]) };
   }
@@ -286,7 +401,7 @@
     FEATURES.forEach((f, i) => {
       z += (w.w[f.id] ?? f.prior) * x[i];
     });
-    const err = sigmoid(z) - label;
+    const err = sigmoid2(z) - label;
     const next = { bias: w.bias - lr * err, w: { ...w.w } };
     FEATURES.forEach((f, i) => {
       const cur = next.w[f.id] ?? f.prior;
@@ -294,6 +409,10 @@
     });
     return next;
   }
+  var learn = {
+    refit: (votes) => refit(votes, DEFAULT_WEIGHTS),
+    evaluate: (votes) => evaluate(votes, DEFAULT_WEIGHTS, (t, w) => localScore(t, w).score)
+  };
 
   // src/lib/scoring.ts
   var scoring_exports = {};
@@ -465,6 +584,6 @@ ${JSON.stringify(state)}${filters}`;
   }
 
   // src/lib/index.ts
-  var SD = { ...scoring_exports, localScore, sgdStep, DEFAULT_WEIGHTS, FEATURES, providers: providers_exports, router: router_exports };
+  var SD = { ...scoring_exports, localScore, sgdStep, DEFAULT_WEIGHTS, learn, FEATURES, providers: providers_exports, router: router_exports };
   globalThis.SD = SD;
 })();

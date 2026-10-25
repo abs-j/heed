@@ -76,3 +76,10 @@ textarea { resize:vertical; }
   .savebar { left:0; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+
+.learn-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:6px 0 12px; }
+.learn-stats .stat { background:var(--bg); border:1px solid var(--bd); border-radius:12px; padding:10px 12px; }
+.learn-stats .stat b { display:block; font-size:22px; letter-spacing:-.02em; }
+.learn-stats .stat b.up { color:var(--ok); } .learn-stats .stat b.down { color:var(--slop); }
+.learn-stats .stat span { font-size:12px; color:var(--mute); }
+@media (max-width: 720px) { .learn-stats { grid-template-columns:1fr; } }

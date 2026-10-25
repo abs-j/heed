@@ -124,6 +124,14 @@
         <h3>Most slop-heavy creators you've seen</h3>
         <ul id="offenders" class="votes"></ul>
       </div>
+      <div class="card" id="learnCard">
+        <h2 id="learning">Learning from your votes</h2>
+        <label class="row"><span>Learn from my votes<small class="mute">Your Slop / Not slop votes retrain the on-device classifier on this device. Nothing is uploaded.</small></span>
+          <span class="switch"><input type="checkbox" id="learn"><i></i></span></label>
+        <div id="learnStats" class="learn-stats"></div>
+        <p class="mute" id="learnMsg"></p>
+        <div class="actions"><button id="retrain" class="btn ghost">Retrain now</button></div>
+      </div>
       <div class="card">
         <h2 id="tuning">Threshold tuning</h2>
         <p class="mute" id="tuneMsg"></p>

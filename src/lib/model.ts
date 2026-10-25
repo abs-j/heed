@@ -1,7 +1,8 @@
 import { FEATURES, extract } from "./features";
+import { tasteOf, TASTE_PRIOR, refit, evaluate, type Weights } from "./learn";
 import learned from "./weights.json";
 
-export interface Weights { bias: number; w: Record<string, number>; trained?: { n: number; at: string } }
+export type { Weights };
 
 const priors = (): Weights => ({ bias: -1.2, w: Object.fromEntries(FEATURES.map((f) => [f.id, f.prior])) });
 export const DEFAULT_WEIGHTS: Weights = (learned as Weights)?.w && Object.keys((learned as Weights).w).length
@@ -20,6 +21,12 @@ export function localScore(text: string, weights: Weights = DEFAULT_WEIGHTS): Lo
     z += v;
     if (v > 0.35) contrib.push([f.label, v]);
   });
+  const taste = tasteOf(text, weights.lex);
+  if (taste) {
+    const v = (weights.w.taste ?? TASTE_PRIOR) * taste;
+    z += v;
+    if (v > 0.35) contrib.push(["resembles posts you marked slop", v]);
+  }
   const p = sigmoid(z);
   contrib.sort((a, b) => b[1] - a[1]);
   return { score: Math.round(p * 100), p, hits: contrib.slice(0, 5).map((c) => c[0]) };
@@ -38,3 +45,9 @@ export function sgdStep(w: Weights, text: string, label: 0 | 1, lr = 0.15, l2 = 
   });
   return next;
 }
+
+// Learning entry points bound to the shipped weights.
+export const learn = {
+  refit: (votes: { text: string; label: string }[]) => refit(votes, DEFAULT_WEIGHTS),
+  evaluate: (votes: { text: string; label: string }[]) => evaluate(votes, DEFAULT_WEIGHTS, (t, w) => localScore(t, w).score)
+};

@@ -6,13 +6,14 @@ const store = {
   enabled: true, mode: "blur", sensitivity: 60, provider: "anthropic", providerKeys: { anthropic: "x" }, tierMode: "tiered",
   sdStats: { days: { [day(0)]: { scanned: 212, filtered: 31, tier0: 118, local: 4, spend: .01 }, [day(1)]: { scanned: 340, filtered: 52, tier0: 190, local: 0, spend: .02 }, [day(3)]: { scanned: 120, filtered: 9, tier0: 60, spend: 0 }, [day(4)]: { scanned: 300, filtered: 60, tier0: 150 }, [day(6)]: { scanned: 90, filtered: 14, tier0: 40 } } },
   sdRecent: Array.from({ length: 200 }, (_, i) => Math.min(100, Math.max(0, Math.round(i % 5 === 0 ? 85 + (i % 13) : 5 + (i * 37) % 55)))),
-  sdVotes: [{ key: "a", text: "Here's the thing nobody talks about — success is consistency.", label: "slop", handle: "growthguru", ts: Date.now(), score: 91 }, { key: "b", text: "Shipped the fix for the race condition today.", label: "not_slop", handle: "alex_dev", ts: Date.now(), score: 12 }],
+  _unused: [{ key: "a", text: "Here's the thing nobody talks about — success is consistency.", label: "slop", handle: "growthguru", ts: Date.now(), score: 91 }, { key: "b", text: "Shipped the fix for the race condition today.", label: "not_slop", handle: "alex_dev", ts: Date.now(), score: 12 }],
+  sdVotes: Array.from({length:16},(_, i)=>({key:'k'+i,text:(i%2?'Token presale airdrop whitelist snapshot launch ':'Walked the dog in the rain and fixed the flaky CI test ')+i,label:i%2?'slop':'not_slop',ts:Date.now(),score:i%2?40:10})),
   sdFiltered: [{ key: "c", text: "Hey @grok pick 10 companies that won't exist in 2050.", score: 92, handle: "groktroll", explanation: "@grok prompt-bait", ts: Date.now() }],
   sdCreators: { growthguru: "mute" }, customRules: ["crypto shilling"]
 };
 window.chrome = { storage: { local: { get: async (k) => (typeof k === "string" ? { [k]: store[k] } : Array.isArray(k) ? Object.fromEntries(k.map((x) => [x, store[x]])) : { ...store }), set: async (o) => Object.assign(store, o), remove: async () => {} }, onChanged: { addListener() {} } },
   runtime: { sendMessage: async () => ({}), openOptionsPage() {}, getURL: (p) => p }, tabs: { create() {} }, permissions: { contains: async () => true, request: async () => true } };
-fetch("/" + (new URLSearchParams(location.search).get("p") || "popup.html")).then((r) => r.text()).then((h) => {
+fetch("/" + (new URLSearchParams(location.search).get("p") || "popup.html"), { cache: "no-store" }).then((r) => r.text()).then((h) => {
   document.open(); document.write(h.replace("<head>", '<head><base href="/">')); document.close();
 });
 </script>

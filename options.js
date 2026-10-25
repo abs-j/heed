@@ -374,3 +374,50 @@ function route() {
 }
 addEventListener("hashchange", route);
 route();
+
+// ---- Learning from votes ----
+async function renderLearning() {
+  const { sdVotes = [], sdModel, learn } = await chrome.storage.local.get(["sdVotes", "sdModel", "learn"]);
+  $("learn").checked = learn !== false;
+  const box = $("learnStats");
+  box.textContent = "";
+  const stat = (value, label, cls) => {
+    const d = document.createElement("div");
+    d.className = "stat";
+    const b = document.createElement("b");
+    b.textContent = value;
+    if (cls) b.className = cls;
+    const s = document.createElement("span");
+    s.textContent = label;
+    d.append(b, s);
+    box.append(d);
+  };
+  const ev = SD.learn.evaluate(sdVotes);
+  if (learn === false) {
+    $("learnMsg").textContent = "Learning is off. The shipped classifier is used as is.";
+  } else if (!ev) {
+    const slop = sdVotes.filter((v) => v.label === "slop").length;
+    $("learnMsg").textContent = `Needs at least 10 votes with 3+ of each kind to measure learning (you have ${sdVotes.length}: ${slop} slop, ${sdVotes.length - slop} not slop). Until then it keeps using the shipped classifier.`;
+    stat(String(sdVotes.length), "votes so far");
+  } else {
+    const pct = (x) => Math.round(x * 100) + "%";
+    const d = Math.round((ev.personal.acc - ev.shipped.acc) * 100);
+    stat(pct(ev.shipped.acc), "shipped classifier agrees with your votes");
+    stat(pct(ev.personal.acc), "after learning (cross-validated)", d > 0 ? "up" : d < 0 ? "down" : "");
+    stat(String(sdModel?.trained?.n ?? 0), "votes in the current model");
+    $("learnMsg").textContent = d > 0
+      ? `Learning from your votes improves agreement by ${d} points on posts it has not trained on (on-device classifier only, at a score of 50).`
+      : d < 0 ? "Learning does not help yet; more varied votes will. The model stays close to the shipped one either way."
+      : "No measurable difference yet. More votes will tell.";
+  }
+}
+$("learn").addEventListener("change", async (e) => { await chrome.storage.local.set({ learn: e.target.checked }); renderLearning(); });
+$("retrain").addEventListener("click", async () => {
+  $("learnMsg").textContent = "Retraining…";
+  await chrome.storage.local.set({ learn: true });
+  const { sdVotes = [] } = await chrome.storage.local.get("sdVotes");
+  if (sdVotes.length >= 6) await chrome.storage.local.set({ sdModel: SD.learn.refit(sdVotes) });
+  renderLearning();
+});
+renderLearning();
+chrome.storage.onChanged.addListener((ch) => { if (ch.sdVotes || ch.sdModel || ch.learn) renderLearning(); });

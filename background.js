@@ -36,11 +36,48 @@ const AUTHORS_KEY = "sdAuthors";
 const AUTHORS_MAX = 400;
 
 
+// ---- On-device learning ------------------------------------------------------
+// Your votes retrain the local classifier (see src/lib/learn.ts). The personalised weights
+// live in storage as `sdModel`; the shipped weights are the fallback and the anchor.
+let model = null;
+let modelLoaded = null;
+function loadModel() {
+  if (!modelLoaded) {
+    modelLoaded = chrome.storage.local.get(["sdModel", "learn"]).then((r) => {
+      model = r.learn === false ? null : r.sdModel || null;
+    });
+  }
+  return modelLoaded;
+}
+const local = (text) => SD.localScore(text, model || undefined);
+
+async function refitModel() {
+  const { sdVotes = [], learn } = await chrome.storage.local.get(["sdVotes", "learn"]);
+  if (learn === false || sdVotes.length < 6) {
+    model = null;
+    await chrome.storage.local.remove("sdModel");
+    return;
+  }
+  model = SD.learn.refit(sdVotes);
+  await chrome.storage.local.set({ sdModel: model });
+}
+let refitTimer = null;
+function scheduleRefit() {
+  clearTimeout(refitTimer);
+  refitTimer = setTimeout(() => refitModel().catch(() => {}), 800);
+}
+chrome.storage.onChanged?.addListener((ch, area) => {
+  if (area !== "local") return;
+  if (ch.sdVotes || ch.learn) scheduleRefit();
+  // A retrain done elsewhere (the settings page) takes effect here immediately.
+  if (ch.sdModel && !ch.sdVotes && !ch.learn) model = ch.sdModel.newValue || null;
+});
+
 // ---- Local heuristics -------------------------------------------------------
 // Free, instant signals (adapted from the patterns rule-based detectors use).
 // Used as hints for Jev and as a fallback when the API is unavailable.
 function localResult(text, key, why) {
-  const { score, hits } = SD.localScore(text);
+  const { score, hits } = local(text);
   const note = why === "budget" ? "daily budget reached" : why === "nokey" ? "no API key" : "API unavailable";
   return {
     score, pattern: "local", conf: 0, local: true, key, why: { hits, local: true },
@@ -269,7 +306,7 @@ async function buildContext(text, ctx) {
         recent: author.recent.map((r) => r.t)
       }
     } : {}),
-    ...(SD.localScore(text).hits.length ? { surface_signals_detected_locally: SD.localScore(text).hits } : {}),
+    ...(local(text).hits.length ? { surface_signals_detected_locally: local(text).hits } : {}),
     ...(ctx?.replyTo || ctx?.parent ? {
       reply_context: {
         ...(ctx.replyTo ? { replying_to: ctx.replyTo } : {}),
@@ -366,7 +403,7 @@ function finishResult(a, text, ctx, { examples, votedOn, rules }) {
   if (a.acct && ctx?.handle) patchProfile(ctx.handle, { type: a.acct, typeTs: Date.now() }).catch(() => {});
   const why = {
     acctConf: Math.round(a.acctConf * 100),
-    hits: SD.localScore(text).hits, examples: examples.length, creatorVotes: votedOn || undefined,
+    hits: local(text).hits, examples: examples.length, creatorVotes: votedOn || undefined,
     profile: ctx?.profile?.raw ? ctx.profile.raw.slice(0, 160) : undefined,
     reply: !!(ctx?.replyTo || ctx?.parent), quoted: !!ctx?.quoted,
     provider: a.provider
@@ -422,7 +459,7 @@ const providerName = (cfg) => SD.providers.PROVIDER_DEFAULTS[cfg.provider].label
 
 // A post the on-device classifier is confident about never reaches the LLM.
 function localConfident(text, key, reason) {
-  const { score, hits } = SD.localScore(text);
+  const { score, hits } = local(text);
   const list = hits.length ? `: ${hits.slice(0, 3).join(", ")}` : "";
   const explanation = reason === "confident-slop" ? `Clear slop pattern${list}`
     : reason === "confident-ok" ? "Specific, personal voice (no slop signals)"
@@ -501,7 +538,7 @@ async function runJob({ key, text, ctx, resolve, reject }) {
 }
 
 async function analyzeInner({ text, ctx, refine }) {
-  await loadCache();
+  await Promise.all([loadCache(), loadModel()]);
   const norm = text.trim().toLowerCase();
   const textKey = PROMPT_VERSION + (await hashText(norm));
   // Scores belong to a specific post when X gives us its id, so a copied text from
@@ -530,7 +567,7 @@ async function analyzeInner({ text, ctx, refine }) {
   // Tier 0: the on-device classifier answers on its own when it is confident (or when
   // the reader chose local-only), so those posts never cost an API call.
   const tier = await getTier();
-  const rt = SD.router.route(SD.localScore(text).score, { ...tier, llmReady: ready });
+  const rt = SD.router.route(local(text).score, { ...tier, llmReady: ready });
   if (rt.use === "local") {
     if (refine && keepHit) return present(keepHit, key);
     if (!refine) bumpStat("tier0");
@@ -617,7 +654,7 @@ async function clearAll({ votes }) {
   cache = {};
   clearTimeout(saveTimer);
   const rm = ["sdCache", "sdSpend", "sdSpendDay", "sdFiltered", "sdStats", "sdRecent", AUTHORS_KEY, PROFILES_KEY];
-  if (votes) rm.push("sdVotes");
+  if (votes) { rm.push("sdVotes", "sdModel"); model = null; }
   await chrome.storage.local.remove(rm);
   return {};
 }
