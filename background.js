@@ -551,11 +551,22 @@ async function analyzeInner({ text, ctx, refine }) {
   }
 }
 
+// Rolling list of recent shown scores, so the popup can preview what a sensitivity would fold.
+let recentChain = Promise.resolve();
+function noteScore(score) {
+  recentChain = recentChain.then(async () => {
+    const { sdRecent = [] } = await chrome.storage.local.get("sdRecent");
+    sdRecent.push(score);
+    await chrome.storage.local.set({ sdRecent: sdRecent.slice(-300) });
+  }).catch(() => {});
+}
+
 async function analyze(m) {
   const r = await analyzeInner(m);
   if (!m.refine) {
     bumpStat("scanned");
     if (r.local) bumpStat("local");
+    if (typeof r.score === "number") noteScore(r.score);
   }
   return r;
 }
@@ -605,7 +616,7 @@ async function clearAll({ votes }) {
   await loadCache();
   cache = {};
   clearTimeout(saveTimer);
-  const rm = ["sdCache", "sdSpend", "sdSpendDay", "sdFiltered", "sdStats", AUTHORS_KEY, PROFILES_KEY];
+  const rm = ["sdCache", "sdSpend", "sdSpendDay", "sdFiltered", "sdStats", "sdRecent", AUTHORS_KEY, PROFILES_KEY];
   if (votes) rm.push("sdVotes");
   await chrome.storage.local.remove(rm);
   return {};

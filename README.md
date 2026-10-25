@@ -76,7 +76,7 @@ posts you view is sent to OpenRouter/TypeSafe for scoring. No other network acce
 - Hover any post for a small dock: score chip (click for the **why** popover with a gauge against your threshold, and every signal), **Slop** / **Not slop** votes, **Undo**.
 - Shortcuts, on the post under the pointer or with focus: <kbd>Alt</kbd>+<kbd>S</kbd> slop, <kbd>Alt</kbd>+<kbd>N</kbd> not slop, <kbd>Alt</kbd>+<kbd>U</kbd> undo, <kbd>Alt</kbd>+<kbd>P</kbd> peek, <kbd>Alt</kbd>+<kbd>W</kbd> why. <kbd>Esc</kbd> closes the popover.
 - All injected UI lives in a closed shadow root (`src/content/ui.ts`), so X's CSS can't affect it.
-- `tools/harness/index.html` renders the real content script against a fake timeline (serve the repo root, e.g. `python3 -m http.server`, and open `/tools/harness/index.html`).
+- `tools/harness/page.html?p=popup.html` (or `options.html`) opens those pages with sample data; `tools/harness/index.html` renders the real content script against a fake timeline (serve the repo root, e.g. `python3 -m http.server`, and open `/tools/harness/index.html`).
 
 ## Development (v2 work in progress)
 - `lib.js` and `content.js` are **generated** from `src/lib/*.ts` and `src/content/`: run `npm install && npm run build` after editing, then reload the extension.

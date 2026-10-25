@@ -265,16 +265,17 @@ async function renderStats() {
     }
     t.append(tr);
   };
-  row(["Day", "Scanned", "Filtered", "Local", "Spend"], true);
+  row(["Day", "Scanned", "Filtered", "On-device", "Spend"], true);
   if (!days.length) row(["No data yet", "", "", "", ""]);
-  const tot = { scanned: 0, filtered: 0, local: 0, spend: 0 };
+  const tot = { scanned: 0, filtered: 0, tier0: 0, spend: 0 };
   for (const d of days) {
     const r = sdStats.days[d];
     for (const k of Object.keys(tot)) tot[k] += r[k] || 0;
+    tot.tier0 += r.local || 0;
     const pct = r.scanned ? ` (${Math.round(((r.filtered || 0) / r.scanned) * 100)}%)` : "";
-    row([d, r.scanned || 0, (r.filtered || 0) + pct, r.local || 0, "$" + (r.spend || 0).toFixed(3)]);
+    row([d, r.scanned || 0, (r.filtered || 0) + pct, (r.tier0 || 0) + (r.local || 0), "$" + (r.spend || 0).toFixed(3)]);
   }
-  if (days.length > 1) row(["Total", tot.scanned, tot.filtered, tot.local, "$" + tot.spend.toFixed(3)]);
+  if (days.length > 1) row(["Total", tot.scanned, tot.filtered, tot.tier0, "$" + tot.spend.toFixed(3)]);
 
   const list = $("offenders");
   list.textContent = "";
@@ -360,3 +361,16 @@ chrome.storage.onChanged.addListener((ch) => {
   if (ch.sdVotes || ch.sensitivity) renderTuning();
   if (ch.sdStats || ch.sdAuthors) renderStats();
 });
+
+// ---- Sections (hash routing) ----
+const SECTIONS = ["general", "detection", "filters", "review", "insights", "data"];
+const ALIAS = { history: "review", filtered: "review", creators: "filters", stats: "insights", tuning: "insights", backup: "data" };
+function route() {
+  let h = location.hash.slice(1);
+  h = ALIAS[h] || (SECTIONS.includes(h) ? h : "general");
+  document.querySelectorAll("[data-section]").forEach((s) => (s.hidden = s.id !== h));
+  document.querySelectorAll("#nav a").forEach((a) => (a.dataset.s === h ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+  document.title = `${h[0].toUpperCase() + h.slice(1)} · Slop Detector`;
+}
+addEventListener("hashchange", route);
+route();

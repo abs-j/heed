@@ -1,17 +1,42 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="options.css">
-<style>main{width:280px;margin:12px auto}.row{margin:10px 0}.field{margin:10px 0}h1{font-size:18px}</style></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Slop Detector</title><link rel="stylesheet" href="popup.css"></head>
 <body><main>
-  <h1>Slop Detector</h1>
-  <label class="row"><span>Enabled</span><input type="checkbox" id="enabled"></label>
-  <label class="field"><span>Mode</span>
-    <select id="mode">
-      <option value="blur">Blur + SLOP sticker</option><option value="hide">Hide</option>
-      <option value="dim">Dim</option><option value="badge">Badge</option><option value="scores">Scores only</option>
-    </select></label>
-  <label class="field"><span>Sensitivity (≥ <b id="sv"></b>)</span>
-    <input type="range" id="sensitivity" min="10" max="95" step="5"></label>
-  <p id="today" class="mute"></p>
-  <p id="status" class="status"></p>
-  <a href="#" id="opts">All settings &amp; API key</a> · <a href="#" id="hist">Vote history</a>
+  <header>
+    <span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
+    <div class="ttl"><b>Slop Detector</b><span id="engine" class="sub"></span></div>
+    <label class="switch" title="Enabled"><input type="checkbox" id="enabled" aria-label="Enabled"><i></i></label>
+  </header>
+
+  <p id="status" class="banner" hidden></p>
+
+  <section class="tiles" aria-label="Today">
+    <div class="tile"><b id="tScanned" class="mono">0</b><span>scanned</span></div>
+    <div class="tile"><b id="tFolded" class="mono">0</b><span>folded</span></div>
+    <div class="tile"><b id="tLocal" class="mono">–</b><span>on-device</span></div>
+  </section>
+
+  <section class="spark" aria-label="Folded per day, last 7 days">
+    <svg id="spark" viewBox="0 0 224 36" preserveAspectRatio="none" role="img"></svg>
+    <span class="sub">folded, last 7 days</span>
+  </section>
+
+  <section>
+    <div class="lbl">Mode</div>
+    <div class="seg" id="mode" role="radiogroup" aria-label="Filter mode">
+      <button role="radio" data-v="blur" title="Fold slop into a one-line receipt">Fold</button>
+      <button role="radio" data-v="hide" title="Hide slop completely">Hide</button>
+      <button role="radio" data-v="dim" title="Dim slop">Dim</button>
+      <button role="radio" data-v="badge" title="Show a chip on slop only">Chip</button>
+      <button role="radio" data-v="scores" title="Show scores on every post, no filtering">Scores</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="lbl"><span>Sensitivity <b id="sv" class="mono"></b></span><span id="preview" class="sub"></span></div>
+    <div class="dist"><div id="bars" aria-hidden="true"></div><input type="range" id="sensitivity" min="10" max="95" step="5" aria-label="Sensitivity"></div>
+    <div class="scale mono"><span>flags more</span><span>flags less</span></div>
+  </section>
+
+  <footer><a href="#" id="opts">Settings</a><a href="#" id="hist">Review &amp; votes</a></footer>
 </main><script src="popup.js"></script></body></html>

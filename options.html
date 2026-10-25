@@ -1,113 +1,161 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Slop Detector settings</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Slop Detector settings</title>
 <link rel="stylesheet" href="options.css"></head>
-<body><main>
-  <h1>Slop Detector</h1>
-  <p class="mute">Scores are subjective content-quality assessments from the Jev model, not proof that a post was AI-generated.</p>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span><b>Slop Detector</b></div>
+    <nav id="nav" aria-label="Settings sections">
+      <a href="#general" data-s="general"><svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h14"/><circle cx="7" cy="5" r="1.6"/><circle cx="13" cy="10" r="1.6"/><circle cx="8" cy="15" r="1.6"/></svg>General</a>
+      <a href="#detection" data-s="detection"><svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5"/><path d="m13.2 13.2 4 4"/></svg>Detection</a>
+      <a href="#filters" data-s="filters"><svg viewBox="0 0 20 20"><path d="M3 4h14l-5.2 6.4V16l-3.6-1.8v-3.8z"/></svg>Filters &amp; creators</a>
+      <a href="#review" data-s="review"><svg viewBox="0 0 20 20"><path d="M4 4h12v9H8l-4 3z"/></svg>Review &amp; votes</a>
+      <a href="#insights" data-s="insights"><svg viewBox="0 0 20 20"><path d="M4 16V9M10 16V4M16 16v-5"/></svg>Insights</a>
+      <a href="#data" data-s="data"><svg viewBox="0 0 20 20"><path d="M10 3v9m0 0-3-3m3 3 3-3M4 14v2h12v-2"/></svg>Data</a>
+    </nav>
+    <p class="side-note">Scores are subjective content-quality judgements, not proof that a post was AI-generated.</p>
+  </aside>
 
-  <label class="row"><span>Enabled</span><input type="checkbox" id="enabled"></label>
+  <main>
+    <section id="general" data-section>
+      <header><h1>General</h1><p class="mute">How slop looks and how strict the filter is.</p></header>
+      <div class="card">
+        <label class="row"><span>Enabled<small class="mute">Turn the detector off without uninstalling it.</small></span>
+          <span class="switch"><input type="checkbox" id="enabled"><i></i></span></label>
+        <label class="field"><span>Filter mode</span>
+          <select id="mode">
+            <option value="blur">Fold into a one-line receipt (default)</option>
+            <option value="hide">Hide completely</option>
+            <option value="dim">Dim</option>
+            <option value="badge">Score chip on slop only</option>
+            <option value="scores">Score chip on every post (no filtering)</option>
+          </select>
+        </label>
+        <label class="field"><span>Sensitivity: flag posts scoring ≥ <b id="sv" class="mono"></b></span>
+          <input type="range" id="sensitivity" min="10" max="95" step="5">
+          <small class="mute">Lower flags more posts. Posts within 15 points below the line get an amber edge.</small>
+        </label>
+      </div>
+    </section>
 
-  <label class="field"><span>Filter mode</span>
-    <select id="mode">
-      <option value="blur">Blur + SLOP sticker (default)</option>
-      <option value="hide">Hide completely</option>
-      <option value="dim">Dim</option>
-      <option value="badge">Warning badge only</option>
-      <option value="scores">Show scores only (no filtering)</option>
-    </select>
-  </label>
+    <section id="detection" data-section hidden>
+      <header><h1>Detection</h1><p class="mute">Which engine judges posts and how much it knows about the account.</p></header>
+      <div class="card">
+        <label class="field"><span>Detection engine</span>
+          <select id="tierMode">
+            <option value="tiered">Tiered: local classifier first, AI model only when unsure (recommended)</option>
+            <option value="llm">AI model for every post</option>
+            <option value="local">Local classifier only (free, private, no key)</option>
+          </select>
+          <small class="mute">Tiered answers clear-cut posts on this device and sends only uncertain ones to the model, cutting cost and latency.</small>
+        </label>
+      </div>
+      <div class="card">
+        <h2>AI provider</h2>
+        <label class="field"><span>Provider</span>
+          <select id="provider">
+            <option value="jev">Jev via OpenRouter</option>
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="openai">OpenAI-compatible (OpenAI, OpenRouter, Ollama, LM Studio)</option>
+          </select>
+        </label>
+        <label class="field" id="modelRow"><span>Model</span>
+          <input type="text" id="providerModel" autocomplete="off" spellcheck="false"></label>
+        <label class="field" id="baseRow"><span>Endpoint URL</span>
+          <input type="text" id="providerBase" autocomplete="off" spellcheck="false">
+          <small class="mute">For Ollama use http://localhost:11434/v1/chat/completions and start it with OLLAMA_ORIGINS=chrome-extension://* (no key needed).</small></label>
+        <label class="field"><span id="keyLabel">API key</span>
+          <input type="password" id="apiKey" autocomplete="off">
+          <small class="mute">Stored only in this browser's extension storage. Post text goes to the provider you choose, only for posts the local classifier can't settle.</small></label>
+      </div>
+      <div class="card">
+        <h2>Context</h2>
+        <label class="field"><span>Account-type influence: <b id="iv" class="mono"></b>%</span>
+          <input type="range" id="acctInfluence" min="0" max="150" step="10">
+          <small class="mute">How much the kind of account (viral-repost channel, individual…) shifts a score. 0 judges the post alone. Applies instantly.</small></label>
+        <label class="row"><span>Check creator profiles<small class="mute">Reads each creator's bio from X's hover card or a profile page you visit.</small></span>
+          <span class="switch"><input type="checkbox" id="profiles"><i></i></span></label>
+        <label class="field"><span>Daily spend cap (USD, 0 = no cap)</span>
+          <input type="number" id="dailyBudget" min="0" step="0.05">
+          <small class="mute">Once reached, posts get local checks only until tomorrow. Tracks Jev costs only.</small></label>
+      </div>
+    </section>
 
-  <label class="field"><span>Sensitivity: flag posts scoring ≥ <b id="sv"></b></span>
-    <input type="range" id="sensitivity" min="10" max="95" step="5">
-    <small class="mute">Lower = flags more posts.</small>
-  </label>
+    <section id="filters" data-section hidden>
+      <header><h1>Filters &amp; creators</h1><p class="mute">Your own rules, applied alongside the detector.</p></header>
+      <div class="card">
+        <h2>Your own filters</h2>
+        <label class="field"><span>One per line, up to 5</span>
+          <textarea id="customRules" rows="4" placeholder="crypto shilling&#10;rage politics&#10;AI-generated motivational quotes"></textarea>
+          <small class="mute">Plain-language topics to fold alongside slop. Checked in the same request, so no extra calls.</small></label>
+      </div>
+      <div class="card">
+        <h2 id="creators">Creator rules</h2>
+        <p class="mute">Always fold or always show a creator, with no AI call. Creators you vote the same way 3 times are handled automatically.</p>
+        <div class="actions">
+          <input type="text" id="cHandle" placeholder="@handle" autocomplete="off">
+          <select id="cRule"><option value="mute">Always fold</option><option value="trust">Always show</option></select>
+          <button id="cAdd" class="btn">Add</button>
+        </div>
+        <ul id="cList" class="votes"></ul>
+      </div>
+    </section>
 
-  <label class="field"><span>Detection engine</span>
-    <select id="tierMode">
-      <option value="tiered">Tiered: local classifier first, AI model only when unsure (recommended)</option>
-      <option value="llm">AI model for every post</option>
-      <option value="local">Local classifier only (free, private, no key)</option>
-    </select>
-    <small class="mute">Tiered answers clear-cut posts on this device and only sends uncertain ones to the model, cutting cost and latency.</small>
-  </label>
+    <section id="review" data-section hidden>
+      <header><h1>Review &amp; votes</h1><p class="mute">Overrule the detector. Your votes also teach it your taste.</p></header>
+      <div class="card">
+        <h2 id="filtered">Recently filtered</h2>
+        <p class="mute" id="fcount"></p>
+        <ul id="fList" class="votes"></ul>
+      </div>
+      <div class="card">
+        <h2 id="history">Vote history</h2>
+        <p class="mute" id="hcount"></p>
+        <ul id="votes" class="votes"></ul>
+      </div>
+    </section>
 
-  <label class="field"><span>AI provider</span>
-    <select id="provider">
-      <option value="jev">Jev via OpenRouter</option>
-      <option value="anthropic">Anthropic (Claude)</option>
-      <option value="openai">OpenAI-compatible (OpenAI, OpenRouter, Ollama, LM Studio)</option>
-    </select>
-  </label>
-  <label class="field" id="modelRow"><span>Model</span>
-    <input type="text" id="providerModel" autocomplete="off" spellcheck="false">
-  </label>
-  <label class="field" id="baseRow"><span>Endpoint URL</span>
-    <input type="text" id="providerBase" autocomplete="off" spellcheck="false">
-    <small class="mute">For Ollama use http://localhost:11434/v1/chat/completions and start it with OLLAMA_ORIGINS=chrome-extension://* (no key needed).</small>
-  </label>
-  <label class="field"><span id="keyLabel">API key</span>
-    <input type="password" id="apiKey" autocomplete="off">
-    <small class="mute">Stored only in this browser's extension storage. Post text is sent to the provider you choose, only for posts the local classifier can't settle.</small>
-  </label>
+    <section id="insights" data-section hidden>
+      <header><h1>Insights</h1><p class="mute">What the detector has been doing for you.</p></header>
+      <div class="card">
+        <h2 id="stats">Last 7 days</h2>
+        <table id="statTable" class="stats"></table>
+        <h3>Most slop-heavy creators you've seen</h3>
+        <ul id="offenders" class="votes"></ul>
+      </div>
+      <div class="card">
+        <h2 id="tuning">Threshold tuning</h2>
+        <p class="mute" id="tuneMsg"></p>
+        <div class="actions"><button id="tuneApply" class="btn ghost" hidden>Apply suggestion</button></div>
+      </div>
+    </section>
 
-  <label class="field"><span>Account-type influence: <b id="iv"></b>%</span>
-    <input type="range" id="acctInfluence" min="0" max="150" step="10">
-    <small class="mute">How much the kind of account (viral-repost channel, individual...) shifts a post's score. 0 = judge the post alone. Applies instantly, no re-scoring.</small>
-  </label>
+    <section id="data" data-section hidden>
+      <header><h1>Data</h1><p class="mute">Back up, restore or wipe what the extension has stored.</p></header>
+      <div class="card">
+        <h2 id="backup">Backup</h2>
+        <p class="mute">Votes, creator rules, filters and settings. API keys are not included.</p>
+        <div class="actions">
+          <button id="export" class="btn ghost">Export</button>
+          <button id="importBtn" class="btn ghost">Import</button>
+          <input type="file" id="importFile" accept="application/json" hidden>
+          <span id="bmsg" class="mute"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Reset</h2>
+        <p class="mute">Clears cached scores, stats and your vote history. Reload X afterwards.</p>
+        <div class="actions"><button id="clear" class="btn danger">Clear cache &amp; votes</button></div>
+        <p class="mute" id="spend"></p>
+      </div>
+    </section>
 
-  <label class="field"><span>Your own filters (one per line, up to 5)</span>
-    <textarea id="customRules" rows="4" placeholder="crypto shilling&#10;rage politics&#10;AI-generated motivational quotes"></textarea>
-    <small class="mute">Plain-language topics to collapse alongside slop. Checked in the same request, so no extra calls.</small>
-  </label>
-
-  <label class="row"><span>Check creator profiles (bio, followers)</span><input type="checkbox" id="profiles"></label>
-  <p class="mute">Reads each creator's bio from X's hover card or a profile page you visit so the model can judge the channel, not just the post.</p>
-
-  <label class="field"><span>Daily spend cap (USD, 0 = no cap)</span>
-    <input type="number" id="dailyBudget" min="0" step="0.05">
-    <small class="mute">Once reached, posts get free local checks only until tomorrow.</small>
-  </label>
-
-  <div class="actions">
-    <button id="save">Save</button>
-    <button id="clear" class="ghost">Clear cache &amp; feedback</button>
-    <span id="msg" class="mute"></span>
-  </div>
-  <p id="status" class="status"></p>
-  <p class="mute" id="spend"></p>
-
-  <h2 id="tuning">Threshold tuning</h2>
-  <p class="mute" id="tuneMsg"></p>
-  <div class="actions"><button id="tuneApply" class="ghost" hidden>Apply suggestion</button></div>
-
-  <h2 id="stats">Last 7 days</h2>
-  <table id="statTable" class="stats"></table>
-  <h3>Most slop-heavy creators you've seen</h3>
-  <ul id="offenders" class="votes"></ul>
-
-  <h2 id="creators">Creator rules</h2>
-  <p class="mute">Always collapse or always show a creator, with no API call. Creators you vote the same way 3 times are handled automatically.</p>
-  <div class="actions">
-    <input type="text" id="cHandle" placeholder="@handle" autocomplete="off">
-    <select id="cRule"><option value="mute">Always collapse</option><option value="trust">Always show</option></select>
-    <button id="cAdd">Add</button>
-  </div>
-  <ul id="cList" class="votes"></ul>
-
-  <h2 id="filtered">Recently filtered</h2>
-  <p class="mute" id="fcount"></p>
-  <ul id="fList" class="votes"></ul>
-
-  <h2 id="backup">Backup</h2>
-  <p class="mute">Votes, creator rules, filters and settings. The API key is not included.</p>
-  <div class="actions">
-    <button id="export" class="ghost">Export</button>
-    <button id="importBtn" class="ghost">Import</button>
-    <input type="file" id="importFile" accept="application/json" hidden>
-    <span id="bmsg" class="mute"></span>
-  </div>
-
-  <h2 id="history">Vote history</h2>
-  <p class="mute" id="hcount"></p>
-  <ul id="votes" class="votes"></ul>
-</main><script src="lib.js"></script><script src="options.js"></script></body></html>
+    <div class="savebar">
+      <button id="save" class="btn">Save changes</button>
+      <span id="msg" class="mute" role="status"></span>
+      <span id="status" class="status"></span>
+    </div>
+  </main>
+</div>
+<script src="lib.js"></script><script src="options.js"></script></body></html>
