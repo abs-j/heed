@@ -164,7 +164,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       dock.append(dot);
       if (v.voted) {
         const vt = h("span", "voted");
-        vt.append("You marked ", h("b", void 0, v.voted === "slop" ? "slop" : "not slop"));
+        vt.append("Marked ", h("b", void 0, v.voted === "slop" ? "slop" : "not slop"));
         dock.append(vt, btn("act", "Undo", () => act.undo(), "Undo (Alt+U)"));
       } else {
         const vs = btn("act s" + (v.state === "ok" ? " lead" : ""), v.state === "ok" ? "Mark slop" : "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");

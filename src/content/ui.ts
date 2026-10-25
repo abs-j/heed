@@ -192,7 +192,7 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
     dotEl = dot;
     dock.append(dot);
     if (v.voted) {
-      const vt = h("span", "voted"); vt.append("You marked ", h("b", undefined, v.voted === "slop" ? "slop" : "not slop"));
+      const vt = h("span", "voted"); vt.append("Marked ", h("b", undefined, v.voted === "slop" ? "slop" : "not slop"));
       dock.append(vt, btn("act", "Undo", () => act.undo(), "Undo (Alt+U)"));
     } else {
       // A post that looks fine only needs one obvious action: tell it what it missed.

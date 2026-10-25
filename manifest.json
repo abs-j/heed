@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Slop Detector",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "Quietly folds low-effort, formulaic and engagement-farming posts on X. On-device first, optional AI model, learns your taste.",
   "permissions": [
     "storage"
