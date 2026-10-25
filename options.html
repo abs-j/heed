@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Slop Detector settings</title>
+<link rel="stylesheet" href="options.css"></head>
+<body><main>
+  <h1>Slop Detector</h1>
+  <p class="mute">Scores are subjective content-quality assessments from the Jev model, not proof that a post was AI-generated.</p>
+
+  <label class="row"><span>Enabled</span><input type="checkbox" id="enabled"></label>
+
+  <label class="field"><span>Filter mode</span>
+    <select id="mode">
+      <option value="blur">Blur + SLOP sticker (default)</option>
+      <option value="hide">Hide completely</option>
+      <option value="dim">Dim</option>
+      <option value="badge">Warning badge only</option>
+      <option value="scores">Show scores only (no filtering)</option>
+    </select>
+  </label>
+
+  <label class="field"><span>Sensitivity: flag posts scoring ≥ <b id="sv"></b></span>
+    <input type="range" id="sensitivity" min="10" max="95" step="5">
+    <small class="mute">Lower = flags more posts.</small>
+  </label>
+
+  <label class="field"><span>OpenRouter API key</span>
+    <input type="password" id="apiKey" placeholder="sk-or-v1-..." autocomplete="off">
+    <small class="mute">Stored only in this browser's extension storage. Post text is sent to OpenRouter for scoring.</small>
+  </label>
+
+  <label class="field"><span>Account-type influence: <b id="iv"></b>%</span>
+    <input type="range" id="acctInfluence" min="0" max="150" step="10">
+    <small class="mute">How much the kind of account (viral-repost channel, individual...) shifts a post's score. 0 = judge the post alone. Applies instantly, no re-scoring.</small>
+  </label>
+
+  <label class="field"><span>Your own filters (one per line, up to 5)</span>
+    <textarea id="customRules" rows="4" placeholder="crypto shilling&#10;rage politics&#10;AI-generated motivational quotes"></textarea>
+    <small class="mute">Plain-language topics to collapse alongside slop. Checked in the same request, so no extra calls.</small>
+  </label>
+
+  <label class="row"><span>Check creator profiles (bio, followers)</span><input type="checkbox" id="profiles"></label>
+  <p class="mute">Reads each creator's bio from X's hover card or a profile page you visit so the model can judge the channel, not just the post.</p>
+
+  <label class="field"><span>Daily spend cap (USD, 0 = no cap)</span>
+    <input type="number" id="dailyBudget" min="0" step="0.05">
+    <small class="mute">Once reached, posts get free local checks only until tomorrow.</small>
+  </label>
+
+  <div class="actions">
+    <button id="save">Save</button>
+    <button id="clear" class="ghost">Clear cache &amp; feedback</button>
+    <span id="msg" class="mute"></span>
+  </div>
+  <p id="status" class="status"></p>
+  <p class="mute" id="spend"></p>
+
+  <h2 id="tuning">Threshold tuning</h2>
+  <p class="mute" id="tuneMsg"></p>
+  <div class="actions"><button id="tuneApply" class="ghost" hidden>Apply suggestion</button></div>
+
+  <h2 id="stats">Last 7 days</h2>
+  <table id="statTable" class="stats"></table>
+  <h3>Most slop-heavy creators you've seen</h3>
+  <ul id="offenders" class="votes"></ul>
+
+  <h2 id="creators">Creator rules</h2>
+  <p class="mute">Always collapse or always show a creator, with no API call. Creators you vote the same way 3 times are handled automatically.</p>
+  <div class="actions">
+    <input type="text" id="cHandle" placeholder="@handle" autocomplete="off">
+    <select id="cRule"><option value="mute">Always collapse</option><option value="trust">Always show</option></select>
+    <button id="cAdd">Add</button>
+  </div>
+  <ul id="cList" class="votes"></ul>
+
+  <h2 id="filtered">Recently filtered</h2>
+  <p class="mute" id="fcount"></p>
+  <ul id="fList" class="votes"></ul>
+
+  <h2 id="backup">Backup</h2>
+  <p class="mute">Votes, creator rules, filters and settings. The API key is not included.</p>
+  <div class="actions">
+    <button id="export" class="ghost">Export</button>
+    <button id="importBtn" class="ghost">Import</button>
+    <input type="file" id="importFile" accept="application/json" hidden>
+    <span id="bmsg" class="mute"></span>
+  </div>
+
+  <h2 id="history">Vote history</h2>
+  <p class="mute" id="hcount"></p>
+  <ul id="votes" class="votes"></ul>
+</main><script src="lib.js"></script><script src="options.js"></script></body></html>

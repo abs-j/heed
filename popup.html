@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="options.css">
+<style>main{width:280px;margin:12px auto}.row{margin:10px 0}.field{margin:10px 0}h1{font-size:18px}</style></head>
+<body><main>
+  <h1>Slop Detector</h1>
+  <label class="row"><span>Enabled</span><input type="checkbox" id="enabled"></label>
+  <label class="field"><span>Mode</span>
+    <select id="mode">
+      <option value="blur">Blur + SLOP sticker</option><option value="hide">Hide</option>
+      <option value="dim">Dim</option><option value="badge">Badge</option><option value="scores">Scores only</option>
+    </select></label>
+  <label class="field"><span>Sensitivity (≥ <b id="sv"></b>)</span>
+    <input type="range" id="sensitivity" min="10" max="95" step="5"></label>
+  <p id="today" class="mute"></p>
+  <p id="status" class="status"></p>
+  <a href="#" id="opts">All settings &amp; API key</a> · <a href="#" id="hist">Vote history</a>
+</main><script src="popup.js"></script></body></html>

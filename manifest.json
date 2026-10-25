@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Slop Detector",
+  "version": "1.5.0",
+  "description": "Flags low-effort, formulaic posts on X with a subjective 0-100 slop score using Jev via OpenRouter.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://openrouter.ai/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["lib.js", "content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "Slop Detector" },
+  "options_page": "options.html",
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
