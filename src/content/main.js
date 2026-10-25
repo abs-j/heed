@@ -257,14 +257,16 @@ import { mountCard } from "./ui";
   }
 
   function clearDecor(article) {
-    article.classList.remove("sd-collapsed", "sd-dim", "sd-open");
+    article.removeAttribute("data-sd-fold");
+    article.removeAttribute("data-sd-dim");
+    article.removeAttribute("data-sd-open");
     article.style.maxHeight = "";
     article.style.overflow = "";
     article._sdCard?.destroy();
     article._sdCard = null;
     article.removeAttribute("data-sd");
-    article.closest('[data-testid="cellInnerDiv"]')?.classList.remove("sd-hidden");
-    (article._sdFolded || []).forEach((c) => c.classList.remove("sd-folded"));
+    article.closest('[data-testid="cellInnerDiv"]')?.removeAttribute("data-sd-hidden");
+    (article._sdFolded || []).forEach((c) => c.removeAttribute("data-sd-folded"));
     article._sdFolded = [];
   }
 
@@ -279,7 +281,7 @@ import { mountCard } from "./ui";
     while (cell && article._sdFolded.length < 15) {
       const a = cell.querySelector('article[data-testid="tweet"]');
       if (!a || handleOf(a) !== handle) break;
-      cell.classList.add("sd-folded");
+      cell.setAttribute("data-sd-folded", "");
       article._sdFolded.push(cell);
       cell = cell.nextElementSibling;
     }
@@ -292,8 +294,8 @@ import { mountCard } from "./ui";
   function render(article) {
     const r = results.get(article);
     if (!r) return;
-    const wasCollapsed = article.classList.contains("sd-collapsed");
-    const wasOpen = article.classList.contains("sd-open");
+    const wasCollapsed = article.hasAttribute("data-sd-fold");
+    const wasOpen = article.hasAttribute("data-sd-open");
     const fullHeight = article.offsetHeight;
     clearDecor(article);
     if (!settings.enabled) return;
@@ -308,9 +310,9 @@ import { mountCard } from "./ui";
       }
       if (settings.mode === "hide") {
         const cell = article.closest('[data-testid="cellInnerDiv"]');
-        if (cell) { cell.classList.add("sd-hidden"); foldThread(article); logFiltered(article, r); return; }
+        if (cell) { cell.setAttribute("data-sd-hidden", ""); foldThread(article); logFiltered(article, r); return; }
       }
-      if (settings.mode === "dim") article.classList.add("sd-dim");
+      if (settings.mode === "dim") article.setAttribute("data-sd-dim", "");
     }
     mount(article, r, { strip: false, folded: 0 });
   }
@@ -351,14 +353,14 @@ import { mountCard } from "./ui";
     // Start the transition from the post's current height so it glides shut.
     const animate = !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
     if (animate) article.style.maxHeight = fullHeight + "px";
-    article.classList.add("sd-collapsed");
+    article.setAttribute("data-sd-fold", "");
     mount(article, r, { strip: true, folded: foldThread(article) });
     if (animate) {
       void article.offsetHeight;
       article.style.maxHeight = "";
     }
     if (wasOpen) {
-      article.classList.add("sd-open");
+      article.setAttribute("data-sd-open", "");
       article._sdCard?.setOpen(true);
       openPosts.add(article);
       watch();
@@ -382,7 +384,7 @@ import { mountCard } from "./ui";
     if (watchT || !openPosts.size) return;
     watchT = setInterval(() => {
       for (const a of [...openPosts]) {
-        if (!a.isConnected || !a.classList.contains("sd-open")) { openPosts.delete(a); continue; }
+        if (!a.isConnected || !a.hasAttribute("data-sd-open")) { openPosts.delete(a); continue; }
         if (inside(a)) { a._sdSeen = true; continue; }
         // Opened by keyboard with the pointer elsewhere: leave it until the pointer has visited.
         if (a._sdSeen) closePost(a);
@@ -394,15 +396,15 @@ import { mountCard } from "./ui";
   addEventListener("blur", () => { px = py = -1; });
 
   function openPost(article) {
-    if (!article.classList.contains("sd-collapsed") || article.classList.contains("sd-open")) return;
-    article.classList.add("sd-open");
+    if (!article.hasAttribute("data-sd-fold") || article.hasAttribute("data-sd-open")) return;
+    article.setAttribute("data-sd-open", "");
     article._sdCard?.setOpen(true);
     article._sdSeen = inside(article);
     openPosts.add(article);
     watch();
     article.style.maxHeight = article.scrollHeight + "px";
     const settle = () => {
-      if (!article.classList.contains("sd-open")) return;
+      if (!article.hasAttribute("data-sd-open")) return;
       article.style.maxHeight = "none";
       article.style.overflow = "visible";
     };
@@ -410,15 +412,15 @@ import { mountCard } from "./ui";
   }
 
   function closePost(article, force = false) {
-    if (!article.classList.contains("sd-open") || (!force && inside(article))) return;
+    if (!article.hasAttribute("data-sd-open") || (!force && inside(article))) return;
     openPosts.delete(article);
     article.style.overflow = "hidden";
     article.style.maxHeight = article.offsetHeight + "px";
     void article.offsetHeight;
-    article.classList.remove("sd-open");
+    article.removeAttribute("data-sd-open");
     article._sdCard?.setOpen(false);
     article.style.maxHeight = "";
-    setTimeout(() => { if (!article.classList.contains("sd-open")) article.style.overflow = ""; }, 320);
+    setTimeout(() => { if (!article.hasAttribute("data-sd-open")) article.style.overflow = ""; }, 320);
   }
 
   function bindHover(article) {
@@ -537,7 +539,7 @@ import { mountCard } from "./ui";
     if (k === "KeyS" && !r.fb) vote(article, r, "slop");
     else if (k === "KeyN" && !r.fb) vote(article, r, "not_slop");
     else if (k === "KeyU" && r.fb) undo(article, r);
-    else if (k === "KeyP") { if (article.classList.contains("sd-open")) closePost(article, true); else openPost(article); }
+    else if (k === "KeyP") { if (article.hasAttribute("data-sd-open")) closePost(article, true); else openPost(article); }
     else if (k === "KeyW") { if (article.dataset.sdWhy === "1") delete article.dataset.sdWhy; else article.dataset.sdWhy = "1"; render(article); }
     else return;
     e.preventDefault(); e.stopPropagation();

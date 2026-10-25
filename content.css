@@ -3,8 +3,7 @@
 :root { --sd-fg: #0f1419; --sd-bg: #fff; --sd-mute: #536471; --sd-border: #cfd9de; }
 :root[data-sd-theme="dark"] { --sd-mute: #71767b; --sd-border: #2f3336; }
 
-.sd-hidden { display: none !important; }
-.sd-folded { display: none !important; }
+[data-sd-hidden], [data-sd-folded] { display: none !important; }
 
 article[data-testid="tweet"][data-sd] { position: relative; }
 /* The card ignores the pointer itself, so hover is read off the post and handed in as a variable. */
@@ -12,22 +11,22 @@ article[data-testid="tweet"][data-sd]:hover > sd-card, article[data-testid="twee
 
 /* Folded slop: the post collapses to one row; its content stays in the DOM, blurred,
    and a hover opens it with a height transition. */
-article[data-testid="tweet"].sd-collapsed {
+article[data-testid="tweet"][data-sd-fold] {
   max-height: 64px; overflow: hidden;
   transition: max-height .3s cubic-bezier(.2,.8,.2,1);
 }
-article.sd-collapsed > *:not(sd-card) {
+article[data-sd-fold] > *:not(sd-card) {
   filter: blur(12px); opacity: .22; pointer-events: none; user-select: none;
   transition: filter .24s ease, opacity .24s ease;
 }
-article.sd-collapsed.sd-open > *:not(sd-card) {
+article[data-sd-fold][data-sd-open] > *:not(sd-card) {
   filter: none; opacity: 1; pointer-events: auto; user-select: auto;
 }
-article.sd-dim { opacity: .45; transition: opacity .2s ease; }
-article.sd-dim:hover { opacity: 1; }
+article[data-sd-dim] { opacity: .45; transition: opacity .2s ease; }
+article[data-sd-dim]:hover { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
-  article[data-testid="tweet"].sd-collapsed, article.sd-collapsed > * { transition: none !important; }
+  article[data-testid="tweet"][data-sd-fold], article[data-sd-fold] > * { transition: none !important; }
 }
 
 /* Profile lookups open X's hover card invisibly for a moment. */
