@@ -2,7 +2,9 @@
 import { mountCard } from "./ui";
 
 (() => {
-  const MIN_CHARS = 40;
+  // Any post with a little text gets a card so it can be marked by hand; the background
+  // only sends posts of 40+ characters to an AI model (shorter ones are scored locally).
+  const MIN_CHARS = 3;
   const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: true, acctInfluence: 100 };
   // Only borderline posts get the (slower) creator-profile second pass.
   const BORDER = [35, 75];
@@ -239,7 +241,7 @@ import { mountCard } from "./ui";
 
     // Pass 2: only borderline posts are worth reading the creator's profile for.
     const borderline = r.score >= BORDER[0] && r.score <= BORDER[1];
-    if (!borderline || known || r.fb || r.creator || r.profiled || !ctx.handle || !settings.profiles) return;
+    if (!borderline || known || r.fb || r.creator || r.tier === "local" || r.profiled || !ctx.handle || !settings.profiles) return;
     const prof = await probeProfile(article, ctx.handle);
     if (!prof || !article.isConnected || results.get(article)?.fb) return;
     const r2 = await ask(text, { ...ctx, profile: prof }, true);
@@ -452,6 +454,9 @@ import { mountCard } from "./ui";
     if (!res || res.error) return;
     results.set(article, { ...res, text: r.text });
     delete article.dataset.sdPeek;
+    // Marking a post slop folds it, but keep it open until the pointer leaves so the
+    // confirmation and Undo are visible.
+    if (label === "slop" && settings.mode === "blur") article.setAttribute("data-sd-open", "");
     if (label === "not_slop") article.dataset.sdRevealed = "1";
     else delete article.dataset.sdRevealed;
     render(article);

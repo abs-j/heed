@@ -130,6 +130,7 @@ async function addSpend(cost) {
 }
 
 const QUEUE_MAX = 40;
+const SHORT_POST = 40;
 
 // ---- Usage stats (last 30 days) ----------------------------------------------
 // Counters and recent scores are buffered and written together, so scoring a post costs no
@@ -583,6 +584,12 @@ async function analyzeInner({ text, ctx, refine }) {
   if (hit?.fb) return present(hit, key);
   const creator = await creatorOverride(ctx?.handle);
   if (creator) return { ...creator, key };
+  // Short posts are scored on-device only: too little text for the AI model to add much,
+  // and it keeps every post markable by hand at no cost.
+  if (text.trim().length < SHORT_POST && !hit) {
+    if (!refine) bumpStat("tier0");
+    return localConfident(text, key, "local-only");
+  }
   // A cached score is stale once your custom filters change, or when asked to refine.
   const sig = (await getRules()).join("|");
   if (hit && (hit.rulesSig || "") === sig && !refine) return present(hit, key);

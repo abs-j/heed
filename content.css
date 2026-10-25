@@ -32,5 +32,10 @@ article[data-sd-dim]:hover { opacity: 1; }
   article[data-testid="tweet"][data-sd-fold], article[data-sd-fold] > * { transition: none !important; }
 }
 
+/* The why popover hangs below its post: let it escape X's overflow clipping and lift its
+   whole timeline cell above the cells that follow (each cell is its own stacking context). */
+article[data-testid="tweet"][data-sd][data-sd-why] { overflow: visible !important; }
+[data-testid="cellInnerDiv"]:has(article[data-sd-why]) { z-index: 50 !important; }
+
 /* Profile lookups open X's hover card invisibly for a moment. */
 html.sd-probing [data-testid="HoverCard"] { opacity: 0 !important; pointer-events: none !important; }

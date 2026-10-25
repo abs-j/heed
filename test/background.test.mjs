@@ -72,3 +72,13 @@ test("a personalised sdModel in storage changes the local score used for routing
   const personal = await boot({ sdModel: SD.learn.refit(votes) }, ok({}))({ type: "analyze", text: probe, ctx: { postId: "71" } });
   assert.ok(personal.score > shipped.score + 10, `shipped ${shipped.score}, personal ${personal.score}`);
 });
+
+test("short posts are scored on-device (markable by hand) and never call the API", async () => {
+  calls.length = 0;
+  const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" }, tierMode: "llm" }, anth({ slop: 50 }));
+  const r = await send({ type: "analyze", text: "Wild times", ctx: { postId: "88" } });
+  assert.equal(calls.length, 0);
+  assert.equal(r.tier, "local");
+  assert.equal(typeof r.score, "number");
+  assert.ok(r.key);
+});

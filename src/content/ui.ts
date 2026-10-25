@@ -86,7 +86,7 @@ button:focus-visible, .strip:focus-visible { outline: 2px solid var(--c, var(--s
 .dot:hover { background: color-mix(in srgb, var(--sd-fg, #000) 8%, transparent); }
 .act { padding: 3px 9px; border-radius: 999px; font-weight: 650; font-size: 12px; color: var(--sd-mute, #536471); }
 .act:hover { background: color-mix(in srgb, var(--sd-fg, #000) 9%, transparent); color: var(--sd-fg, #0f1419); }
-.act.s:hover { color: var(--slop); } .act.n:hover { color: var(--ok); }
+.act.lead { color: var(--sd-fg, #0f1419); } .act.s:hover { color: var(--slop); } .act.n:hover { color: var(--ok); }
 .voted { padding: 3px 8px 3px 10px; font-size: 12px; color: var(--sd-mute, #536471); }
 .voted b { color: var(--sd-fg, #0f1419); font-weight: 650; }
 
@@ -195,10 +195,15 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
       const vt = h("span", "voted"); vt.append("You marked ", h("b", undefined, v.voted === "slop" ? "slop" : "not slop"));
       dock.append(vt, btn("act", "Undo", () => act.undo(), "Undo (Alt+U)"));
     } else {
-      const vs = btn("act s", "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
-      const vn = btn("act n", "Not slop", () => act.vote("not_slop"), "Mark as not slop (Alt+N)");
-      vs.setAttribute("aria-label", "Mark this post as slop"); vn.setAttribute("aria-label", "Mark this post as not slop");
-      dock.append(vs, vn);
+      // A post that looks fine only needs one obvious action: tell it what it missed.
+      const vs = btn("act s" + (v.state === "ok" ? " lead" : ""), v.state === "ok" ? "Mark slop" : "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
+      vs.setAttribute("aria-label", "Mark this post as slop");
+      dock.append(vs);
+      if (v.state !== "ok") {
+        const vn = btn("act n", "Not slop", () => act.vote("not_slop"), "Mark as not slop (Alt+N)");
+        vn.setAttribute("aria-label", "Mark this post as not slop");
+        dock.append(vn);
+      }
     }
     wrap.append(dock);
 

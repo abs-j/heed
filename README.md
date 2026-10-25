@@ -12,7 +12,7 @@ posts on X, and leaves everything else alone.
 
 - **Fine posts look untouched.** Posts near your threshold get a thin amber edge.
 - **Slop folds into a one-line receipt**: score, verdict, the main reasons and a *Peek* control. Hover (or press <kbd>Enter</kbd>) to open it; it closes again when you leave.
-- **Hover any post** for a small dock: score chip, **Slop** / **Not slop** votes, **Undo**. Click the score for the *why* popover: a gauge against your threshold plus every signal, the model score, account type and what it learned from you.
+- **Hover any post** for a small dock: score chip and votes, **Undo**. A post that looks fine shows one obvious button, **Mark slop**, so you can teach it what it missed (short posts get this too: they're scored on-device only). Click the score for the *why* popover: a gauge against your threshold plus every signal, the model score, account type and what it learned from you.
 - **Learns your taste on-device.** Your votes retrain the local classifier; Settings shows how much better it agrees with you.
 
 ### Modes

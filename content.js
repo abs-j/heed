@@ -57,7 +57,7 @@ button:focus-visible, .strip:focus-visible { outline: 2px solid var(--c, var(--s
 .dot:hover { background: color-mix(in srgb, var(--sd-fg, #000) 8%, transparent); }
 .act { padding: 3px 9px; border-radius: 999px; font-weight: 650; font-size: 12px; color: var(--sd-mute, #536471); }
 .act:hover { background: color-mix(in srgb, var(--sd-fg, #000) 9%, transparent); color: var(--sd-fg, #0f1419); }
-.act.s:hover { color: var(--slop); } .act.n:hover { color: var(--ok); }
+.act.lead { color: var(--sd-fg, #0f1419); } .act.s:hover { color: var(--slop); } .act.n:hover { color: var(--ok); }
 .voted { padding: 3px 8px 3px 10px; font-size: 12px; color: var(--sd-mute, #536471); }
 .voted b { color: var(--sd-fg, #0f1419); font-weight: 650; }
 
@@ -167,11 +167,14 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         vt.append("You marked ", h("b", void 0, v.voted === "slop" ? "slop" : "not slop"));
         dock.append(vt, btn("act", "Undo", () => act.undo(), "Undo (Alt+U)"));
       } else {
-        const vs = btn("act s", "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
-        const vn = btn("act n", "Not slop", () => act.vote("not_slop"), "Mark as not slop (Alt+N)");
+        const vs = btn("act s" + (v.state === "ok" ? " lead" : ""), v.state === "ok" ? "Mark slop" : "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
         vs.setAttribute("aria-label", "Mark this post as slop");
-        vn.setAttribute("aria-label", "Mark this post as not slop");
-        dock.append(vs, vn);
+        dock.append(vs);
+        if (v.state !== "ok") {
+          const vn = btn("act n", "Not slop", () => act.vote("not_slop"), "Mark as not slop (Alt+N)");
+          vn.setAttribute("aria-label", "Mark this post as not slop");
+          dock.append(vn);
+        }
       }
       wrap.append(dock);
       const why = h("div", "why");
@@ -234,7 +237,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
 
   // src/content/main.js
   (() => {
-    const MIN_CHARS = 40;
+    const MIN_CHARS = 3;
     const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: true, acctInfluence: 100 };
     const BORDER = [35, 75];
     const health = { articles: 0, handles: 0, probes: 0, probesOk: 0, noted: "" };
@@ -465,7 +468,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         return;
       }
       const borderline = r.score >= BORDER[0] && r.score <= BORDER[1];
-      if (!borderline || known || r.fb || r.creator || r.profiled || !ctx.handle || !settings.profiles) return;
+      if (!borderline || known || r.fb || r.creator || r.tier === "local" || r.profiled || !ctx.handle || !settings.profiles) return;
       const prof = await probeProfile(article, ctx.handle);
       if (!prof || !article.isConnected || results.get(article)?.fb) return;
       const r2 = await ask(text, { ...ctx, profile: prof }, true);
@@ -694,6 +697,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       if (!res || res.error) return;
       results.set(article, { ...res, text: r.text });
       delete article.dataset.sdPeek;
+      if (label === "slop" && settings.mode === "blur") article.setAttribute("data-sd-open", "");
       if (label === "not_slop") article.dataset.sdRevealed = "1";
       else delete article.dataset.sdRevealed;
       render(article);
