@@ -7,7 +7,10 @@ const needsKey = (s) => (s.tierMode === "local" ? false
   : !s.providerKeys?.[s.provider] && !/^https?:\/\/(localhost|127\.0\.0\.1)/.test(s.providerBase || ""));
 
 function setMode(v) {
-  document.querySelectorAll("#mode button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.v === v)));
+  document.querySelectorAll("#mode button").forEach((b) => {
+    b.setAttribute("aria-checked", String(b.dataset.v === v));
+    b.tabIndex = b.dataset.v === v ? 0 : -1;
+  });
 }
 
 // Histogram of recently shown scores with the part that the current sensitivity would flag.
@@ -84,6 +87,16 @@ $("mode").onclick = (e) => {
   if (!b) return;
   setMode(b.dataset.v);
   chrome.storage.local.set({ mode: b.dataset.v });
+};
+$("mode").onkeydown = (e) => {
+  const keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+  if (!(e.key in keys)) return;
+  const btns = [...document.querySelectorAll("#mode button")];
+  const i = btns.findIndex((b) => b.getAttribute("aria-checked") === "true");
+  const next = btns[(i + keys[e.key] + btns.length) % btns.length];
+  e.preventDefault();
+  next.click();
+  next.focus();
 };
 $("opts").onclick = (e) => { e.preventDefault(); chrome.runtime.openOptionsPage(); };
 $("hist").onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL("options.html#review") }); };

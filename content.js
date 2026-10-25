@@ -4,7 +4,7 @@
   // src/content/ui.ts
   var CSS = `
 :host { all: initial; position: absolute; inset: 0; z-index: 5; pointer-events: none; display: block;
-  --slop: #f2545b; --warn: #eeb23a; --ok: #2fb67c;
+  --slop: var(--sd-slop, #f2545b); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
   font: 400 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", Inter, Roboto, sans-serif;
   color: var(--sd-fg, #0f1419); }
 * { box-sizing: border-box; }
@@ -106,6 +106,8 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     root.append(style, wrap);
     let open = false;
     let view = initial;
+    let dotEl = null;
+    let whyEl = null;
     for (const t of ["click", "mousedown", "pointerdown", "dblclick"]) wrap.addEventListener(t, (e) => e.stopPropagation());
     const btn = (cls, label, fn, title) => {
       const b = h("button", cls, label);
@@ -129,7 +131,8 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       const strip = h("div", "strip");
       strip.setAttribute("role", "button");
       strip.tabIndex = 0;
-      strip.setAttribute("aria-label", `Folded: slop score ${v.score}. ${v.title}. Press Enter to peek.`);
+      strip.setAttribute("aria-label", `Folded post, slop score ${v.score}. ${v.title}. Press Enter to peek.`);
+      strip.setAttribute("aria-expanded", String(open));
       const score = h("div", "score mono");
       score.append(h("b", void 0, String(v.score)), h("i", void 0, verdict(v)));
       const info = h("div", "info");
@@ -151,17 +154,31 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       });
       wrap.append(strip);
       const dock = h("div", "dock");
-      const dot = btn("dot mono", String(v.score), () => act.toggleWhy(), `Slop score ${v.score}. Click to see why. A quality score, not proof of AI generation.`);
+      const dot = btn("dot mono", String(v.score), () => {
+      }, `Slop score ${v.score}. Click to see why. A quality score, not proof of AI generation.`);
+      dot.addEventListener("click", (e) => act.toggleWhy(e.detail === 0));
+      dot.setAttribute("aria-label", `Slop score ${v.score} out of 100. Show why.`);
+      dot.setAttribute("aria-haspopup", "dialog");
+      dot.setAttribute("aria-expanded", String(v.whyOpen));
+      dotEl = dot;
       dock.append(dot);
       if (v.voted) {
         const vt = h("span", "voted");
         vt.append("You marked ", h("b", void 0, v.voted === "slop" ? "slop" : "not slop"));
         dock.append(vt, btn("act", "Undo", () => act.undo(), "Undo (Alt+U)"));
       } else {
-        dock.append(btn("act s", "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)"), btn("act n", "Not slop", () => act.vote("not_slop"), "Mark as not slop (Alt+N)"));
+        const vs = btn("act s", "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
+        const vn = btn("act n", "Not slop", () => act.vote("not_slop"), "Mark as not slop (Alt+N)");
+        vs.setAttribute("aria-label", "Mark this post as slop");
+        vn.setAttribute("aria-label", "Mark this post as not slop");
+        dock.append(vs, vn);
       }
       wrap.append(dock);
       const why = h("div", "why");
+      why.setAttribute("role", "dialog");
+      why.setAttribute("aria-label", "Why this score");
+      why.tabIndex = -1;
+      whyEl = why;
       why.append(
         h("h4", void 0, `${v.state === "slop" ? "Slop" : v.state === "border" ? "Unsure" : "Looks fine"} \xB7 ${v.score}/100`),
         h("p", "lead", `${v.title}. Margin: ${marginLabel(v)}.`)
@@ -200,7 +217,14 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         if (o !== open) {
           open = o;
           wrap.classList.toggle("open", o);
+          wrap.querySelector(".strip")?.setAttribute("aria-expanded", String(o));
         }
+      },
+      focusPanel() {
+        whyEl?.focus({ preventScroll: true });
+      },
+      focusDot() {
+        dotEl?.focus({ preventScroll: true });
       },
       destroy() {
         host.remove();
@@ -544,10 +568,11 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         vote: (label) => vote(article, r, label),
         undo: () => undo(article, r),
         peek: () => openPost(article),
-        toggleWhy: () => {
+        toggleWhy: (viaKeyboard) => {
           if (article.dataset.sdWhy === "1") delete article.dataset.sdWhy;
           else article.dataset.sdWhy = "1";
           render(article);
+          if (viaKeyboard) article._sdCard?.[article.dataset.sdWhy === "1" ? "focusPanel" : "focusDot"]();
         }
       });
     }
@@ -761,6 +786,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         if (article.dataset.sdWhy === "1") delete article.dataset.sdWhy;
         else article.dataset.sdWhy = "1";
         render(article);
+        article._sdCard?.[article.dataset.sdWhy === "1" ? "focusPanel" : "focusDot"]();
       } else return;
       e.preventDefault();
       e.stopPropagation();
@@ -771,9 +797,14 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         if (results.has(a)) render(a);
       });
     }
+    function closeWhyAndRefocus() {
+      const a = document.querySelector('article[data-sd-why="1"]');
+      closeWhy();
+      a?._sdCard?.focusDot();
+    }
     addEventListener("click", closeWhy);
     addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeWhy();
+      if (e.key === "Escape") closeWhyAndRefocus();
     }, true);
     async function init() {
       const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence"]);
@@ -786,10 +817,14 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       document.documentElement.dataset.sdVersion = chrome.runtime.getManifest().version;
       scan();
       let t;
+      let themeAt = 0;
       new MutationObserver(() => {
         clearTimeout(t);
         t = setTimeout(() => {
-          applyTheme();
+          if (Date.now() - themeAt > 3e3) {
+            themeAt = Date.now();
+            applyTheme();
+          }
           scan();
           harvestProfilePage();
         }, 150);

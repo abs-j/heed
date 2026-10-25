@@ -1,87 +1,77 @@
 # Slop Detector
 
-Chrome (Manifest V3) extension that scores posts on X from 0–100 for "slop" using
-Jev (`typesafe/jev-1.13`) via OpenRouter's Decisions API (`POST /api/alpha/decisions`).
+A Chrome (Manifest V3) extension that quietly folds low-effort, formulaic and engagement-farming
+posts on X, and leaves everything else alone.
 
-> Scores are subjective content-quality assessments, **not** proof a post was AI-generated.
+> Scores are subjective **content-quality** judgements, not proof that a post was written by an AI.
+> Detectors for short social posts are unreliable at that, so this one doesn't claim to do it.
+
+<p align="center"><img src="icons/128.png" width="96" alt="Slop Detector icon: three rising bars, green, amber and red"></p>
+
+## What it does
+
+- **Fine posts look untouched.** Posts near your threshold get a thin amber edge.
+- **Slop folds into a one-line receipt**: score, verdict, the main reasons and a *Peek* control. Hover (or press <kbd>Enter</kbd>) to open it; it closes again when you leave.
+- **Hover any post** for a small dock: score chip, **Slop** / **Not slop** votes, **Undo**. Click the score for the *why* popover: a gauge against your threshold plus every signal, the model score, account type and what it learned from you.
+- **Learns your taste on-device.** Your votes retrain the local classifier; Settings shows how much better it agrees with you.
+
+### Modes
+Fold (default) · Hide · Dim · Chip (score chip on slop only) · Scores (chip on every post, no filtering).
+
+### Keyboard (on the post under the pointer, or the focused one)
+| Keys | Action |
+|---|---|
+| <kbd>Alt</kbd>+<kbd>S</kbd> / <kbd>Alt</kbd>+<kbd>N</kbd> | mark slop / not slop |
+| <kbd>Alt</kbd>+<kbd>U</kbd> | undo your vote |
+| <kbd>Alt</kbd>+<kbd>P</kbd> | peek / close a folded post |
+| <kbd>Alt</kbd>+<kbd>W</kbd>, <kbd>Esc</kbd> | open / close the *why* popover |
+
+(Alt chords, because X already owns the bare letter keys.)
 
 ## Install
-1. Create an API key at https://openrouter.ai/settings/keys (and add a few dollars of credit).
-2. Open `chrome://extensions`, enable **Developer mode**.
-3. Click **Load unpacked** and select this `slop-detector` folder.
-4. Click the extension icon → **All settings & API key**, paste the key, **Save**.
-5. Open https://x.com and scroll.
+1. `npm install && npm run build` (generates `lib.js` and `content.js` from `src/`).
+2. Open `chrome://extensions`, enable **Developer mode**, **Load unpacked**, choose this folder.
+3. Optional: open the extension's **Settings → Detection** and add an AI provider key. Without one the on-device classifier works on its own.
+4. Open <https://x.com> and scroll. After rebuilding, click the reload icon on the extension card and refresh X (content scripts attach on page load). `document.documentElement.dataset.sdVersion` on x.com tells you which build is injected.
 
-## Modes
-Blur + SLOP sticker (default, click to reveal) · Hide · Dim · Warning badge · Scores only.
-Sensitivity sets the score threshold at which a post counts as slop.
+## How detection works
 
-## How it works
-- Visible posts (≥40 chars) are sent in the background worker to Jev with two questions:
-  a 5-level slop score and a pattern classification, using a rubric that judges content quality and
-  creator behaviour (engagement farming, recycled viral clips, clickbait, vagueposting vs. genuine
-  individual voices). Each request also carries the creator's display name, handle and verified badge,
-  attached media (image count/alt text, video, link card) and up to 4 earlier posts from the same
-  creator that you've scrolled past. X's timeline doesn't expose bios, so none is sent. Jev returns probabilities, not prose, so the
-  "explanation" is the detected pattern (e.g. "Engagement bait (82% match)").
-- Results are cached 30 days by text hash (max 3000 entries) and duplicate in-flight requests are merged.
-- Slop posts collapse to a compact one-row strip automatically; hover to peek (it opens smoothly and re-minimises when you leave; Enter/click on the strip also opens it). **Slop / Not slop** votes override that
-  post, can be undone, and are listed under **Vote history** in settings (switch or remove any vote).
-  Votes teach the model your taste: each request includes the 4 slop and 4 not-slop votes most similar
-  to the post (matching wording, same creator, recency), plus how many of that creator's posts you've
-  voted each way. Already-scored posts keep their score; new posts benefit from new votes.
-- Errors (bad key, no credits, rate limits) pause requests and show in the popup/settings.
+```
+ post ─▶ on-device classifier ──▶ score ≤ 20 or ≥ 90 ──▶ answer locally (no network)
+            ~40 features + your                │
+            taste lexicon, logistic regression │ uncertain
+                                               ▼
+                                    AI model (Jev · Claude · OpenAI-compatible/Ollama)
+                                    + creator, reply/quote, media, your voted examples
+```
 
-## Beyond the model
-- **Creator rules:** always collapse / always show a creator (settings). Three votes the same way and
-  none the other does this automatically, with no API call.
-- **Local checks:** free pattern heuristics (em-dash density, "not X, it's Y", stock hooks, engagement
-  bait, list formatting vs. slang/first-person/links) are sent to Jev as hints and used as a labelled
-  fallback when there's no key, the API is down, the queue is long or the daily cap is hit. Local
-  results are re-scored by the model after a minute.
-- **Recently filtered:** the last 60 collapsed/hidden posts with reasons, where you can overrule them.
-- **Daily spend cap** in settings.
+- **Local classifier** (`src/lib/features.ts`, `model.ts`): hooks, "not X, it's Y" reversals, engagement bait, @grok prompt-bait, generic reply filler, motivational platitudes, buzzwords, list/fragment cadence, hashtags/emoji; offset by signs of a real voice (first person, narrative, numbers, named entities, technical detail, hedging). ~10 µs per post.
+- **Tiered routing** (`src/lib/router.ts`): clear-cut posts never reach the network. Modes: *Tiered* (default), *AI for every post*, *Local only*.
+- **Providers** (`src/lib/providers.ts`): Jev via OpenRouter, Anthropic, or any OpenAI-compatible endpoint (OpenAI, OpenRouter chat, Ollama, LM Studio; no key on localhost). Custom hosts ask for permission when you save. The daily spend cap currently tracks Jev costs only.
+- **Account context**: creator display name, handle and verified badge, media, replies/quotes, up to 4 earlier posts from the same creator, and (for borderline posts only) the bio and follower text from X's own hover card, read invisibly for a moment. Results are cached per post for 30 days.
+- **Learning** (`src/lib/learn.ts`): a taste lexicon of words and phrases that recur in posts you marked slop vs kept (leave-one-out, so a vote never explains itself) plus a refit of the feature weights, pulled towards the shipped model and capped at ±1.5 per weight. Needs 6 votes to start, 10 (3+ of each kind) to measure. Settings → Insights shows cross-validated agreement. Votes are also sent to the AI model as examples.
+- **Your rules** always win: per-creator *always fold / always show* (three same-way votes set one automatically), and plain-language filters ("crypto shilling") checked in the same AI request.
 
-## More features
-- **Why this score:** click a score chip to see the model score, account-type adjustment, signals,
-  profile text read and the votes that influenced it.
-- **Replies, quotes, threads:** a reply is judged with the post it answers, a quote tweet by the added
-  commentary, and a collapsed thread opener folds the author's consecutive follow-on posts.
-- **Your own filters:** plain-language topics in settings ("crypto shilling") are asked in the same
-  request and collapse matching posts.
-- **Threshold tuning, stats, backup:** settings suggest the sensitivity that best agrees with your
-  votes, show 7-day usage and the most slop-heavy creators, and export/import votes and rules.
+## Settings
+**General** (enable, mode, sensitivity) · **Detection** (engine, provider, account-type influence, creator profiles, spend cap) · **Filters & creators** · **Review & votes** (recently filtered, vote history) · **Insights** (7-day stats, threshold tuning, learning) · **Data** (export/import, reset). The popup is a dashboard: today's counts, a 7-day sparkline, mode, and sensitivity drawn over the distribution of your recent scores.
 
-## Measuring and tuning
-- Results are cached per post (X status id), storing the raw model score separately from the
-  account-type adjustment. The adjustment is applied when shown, so the **Account-type influence**
-  setting and the sensitivity change take effect instantly with no re-scoring.
-- Creator profiles are a second pass: a post is scored first, and only borderline posts (about 35-75)
-  trigger the slower profile lookup and a re-score. Profiles you've already seen are used for free.
-- `node tools/eval.mjs backup.json` replays your exported votes under different influence/threshold
-  settings and lists the posts the model gets wrong. `node --test test/` runs the unit tests.
-- The popup warns if X's layout seems to have changed (creator handles unreadable, or profile lookups
-  returning nothing).
+## Development
+```bash
+npm install
+npm run build      # esbuild: src/lib -> lib.js, src/content -> content.js (both committed, so unpacked loading works)
+npm test           # builds, then runs node --test (classifier, learning, providers, background in a sandbox)
+npm run typecheck  # tsc --noEmit
+npm run eval       # frozen v1.5 heuristic vs the local classifier on the seed and held-out corpora
+npm run train      # retrain shipped weights from the seed corpus (+ optional votes backup)
+npm run bench      # classifier speed (budget: 2 ms/post)
+npm run icons      # regenerate icons/
+```
+- `src/lib/*.ts`: scoring, routing, providers, learning (pure, unit-tested). `src/content/`: DOM adapter, scanner, and the Shadow-DOM card (`ui.ts`). `background.js`: service worker (API calls, cache, queue, stats, retraining). `popup.*`, `options.*`: extension pages.
+- Fold/open/dim state lives in `data-sd-*` attributes, not classes: X's React re-renders rewrite class names and would wipe them.
+- `tools/harness/index.html` runs the real content script against a fake timeline; `tools/harness/page.html?p=popup.html` (or `options.html`) opens the extension pages with sample data. Serve the repo root (`python3 -m http.server`).
+- The bundled corpora in `test/` are **synthetic**, labelled by the author. Use your own exported votes for real calibration: `node tools/eval.mjs backup.json`.
 
 ## Privacy
-The API key lives in `chrome.storage.local` and is only used by the background worker. Text of
-posts you view is sent to OpenRouter/TypeSafe for scoring. No other network access.
+Keys live in `chrome.storage.local` and are only used by the service worker. Text of posts you view is sent to the AI provider you choose, only for posts the on-device classifier can't settle (never, in *Local only*). Learning happens on your device. No analytics, no other network access. Votes, cache and stats can be exported or wiped from Settings → Data.
 
-## Engines and providers (v2)
-- **Tiered by default:** the on-device classifier settles clear-cut posts (score ≤ 20 or ≥ 90) with no network call; only uncertain posts go to the AI model. Choose "AI model for every post" or "Local only" in settings.
-- **Providers:** Jev via OpenRouter (original), Anthropic (Claude), or any OpenAI-compatible endpoint (OpenAI, OpenRouter chat, Ollama, LM Studio; no key needed on localhost). Custom hosts ask for permission when you save. Spend cap currently only tracks Jev costs.
-
-## New look (v2)
-- Fine posts are left untouched. Slop folds into a one-row "receipt" (score, verdict, top reasons, Peek); a thin colour bar marks the edge of folded and borderline posts.
-- Hover any post for a small dock: score chip (click for the **why** popover with a gauge against your threshold, and every signal), **Slop** / **Not slop** votes, **Undo**.
-- Shortcuts, on the post under the pointer or with focus: <kbd>Alt</kbd>+<kbd>S</kbd> slop, <kbd>Alt</kbd>+<kbd>N</kbd> not slop, <kbd>Alt</kbd>+<kbd>U</kbd> undo, <kbd>Alt</kbd>+<kbd>P</kbd> peek, <kbd>Alt</kbd>+<kbd>W</kbd> why. <kbd>Esc</kbd> closes the popover.
-- All injected UI lives in a closed shadow root (`src/content/ui.ts`), so X's CSS can't affect it.
-- `tools/harness/page.html?p=popup.html` (or `options.html`) opens those pages with sample data; `tools/harness/index.html` renders the real content script against a fake timeline (serve the repo root, e.g. `python3 -m http.server`, and open `/tools/harness/index.html`).
-
-## Learning from your votes (v2)
-Every Slop / Not slop vote retrains the on-device classifier, locally. Two mechanisms (`src/lib/learn.ts`): a **taste lexicon** of words and phrases that recur in posts you marked slop vs. kept (leave-one-out, so a vote never explains itself), and a **refit of the feature weights** pulled towards the shipped model and capped at ±1.5 per weight. Settings → Insights → *Learning from your votes* shows a cross-validated agreement score (shipped vs. learned, on posts the model hasn't trained on), a switch to turn learning off, and *Retrain now*. Needs 6 votes to start and 10 (3+ of each kind) to measure. The AI model still gets your votes as prompt examples, as before.
-
-## Development (v2 work in progress)
-- `lib.js` and `content.js` are **generated** from `src/lib/*.ts` and `src/content/`: run `npm install && npm run build` after editing, then reload the extension.
-- Local classifier: `src/lib/features.ts` (≈40 hand-weighted features) + `src/lib/weights.json` (trained). `npm run train [backup.json]` retrains, `npm run eval` compares it with the frozen v1.5 heuristic on the seed and held-out corpora, `npm test` builds and runs everything.
-- The bundled corpora are synthetic and labelled by the author; use your own exported votes for real calibration. See REVAMP_PLAN.md.
+See `REVAMP_PLAN.md` for the v2 design notes and research.

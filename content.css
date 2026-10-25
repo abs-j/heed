@@ -1,5 +1,8 @@
 /* Page-level rules only. Everything we draw (strip, chip, popover) lives in a
    shadow root inside <sd-card> and is styled by src/content/ui.ts. */
+:root { --sd-slop: #f2545b; --sd-warn: #eeb23a; --sd-ok: #2fb67c; }
+/* Darker verdict colours on light themes keep text at >= 4.5:1. */
+:root[data-sd-theme="light"] { --sd-slop: #bd2530; --sd-warn: #8a5a00; --sd-ok: #17724c; }
 :root { --sd-fg: #0f1419; --sd-bg: #fff; --sd-mute: #536471; --sd-border: #cfd9de; }
 :root[data-sd-theme="dark"] { --sd-mute: #71767b; --sd-border: #2f3336; }
 

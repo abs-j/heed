@@ -1,5 +1,7 @@
 # Slop Detector v2 — Revamp Plan
 
+> **Status (v2.2.0):** all six phases are implemented: baseline corpora and local classifier (0–1), tiered pipeline and providers (2), Shadow-DOM UI (3), popup dashboard and settings app (4), on-device learning (5), polish/icon/README/perf/a11y (6). Open follow-ups: a real labelled corpus from your own votes, spend tracking for non-Jev providers, per-phrase creator priors, and a Chrome Web Store build.
+
 ## 1. What I found
 
 **Live on x.com (your browser, extension running):** every post shows a gray `OK · 32/35  Local check (API unavailable)  [Slop] [Not slop]` row. Two problems are visible at once:

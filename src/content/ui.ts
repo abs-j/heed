@@ -26,14 +26,14 @@ export interface Actions {
   vote(label: "slop" | "not_slop"): void;
   undo(): void;
   peek(): void;
-  toggleWhy(): void;
+  toggleWhy(viaKeyboard?: boolean): void;
 }
 
-export interface Card { host: HTMLElement; setOpen(open: boolean): void; destroy(): void }
+export interface Card { host: HTMLElement; setOpen(open: boolean): void; focusPanel(): void; focusDot(): void; destroy(): void }
 
 const CSS = `
 :host { all: initial; position: absolute; inset: 0; z-index: 5; pointer-events: none; display: block;
-  --slop: #f2545b; --warn: #eeb23a; --ok: #2fb67c;
+  --slop: var(--sd-slop, #f2545b); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
   font: 400 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", Inter, Roboto, sans-serif;
   color: var(--sd-fg, #0f1419); }
 * { box-sizing: border-box; }
@@ -139,6 +139,8 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
   root.append(style, wrap);
   let open = false;
   let view = initial;
+  let dotEl: HTMLElement | null = null;
+  let whyEl: HTMLElement | null = null;
 
   // Clicks inside the card must not reach X's own "open this post" handler.
   for (const t of ["click", "mousedown", "pointerdown", "dblclick"]) wrap.addEventListener(t, (e) => e.stopPropagation());
@@ -165,7 +167,8 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
     const strip = h("div", "strip");
     strip.setAttribute("role", "button");
     strip.tabIndex = 0;
-    strip.setAttribute("aria-label", `Folded: slop score ${v.score}. ${v.title}. Press Enter to peek.`);
+    strip.setAttribute("aria-label", `Folded post, slop score ${v.score}. ${v.title}. Press Enter to peek.`);
+    strip.setAttribute("aria-expanded", String(open));
     const score = h("div", "score mono"); score.append(h("b", undefined, String(v.score)), h("i", undefined, verdict(v)));
     const info = h("div", "info");
     const sub = h("div", "sub");
@@ -181,18 +184,30 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
 
     // Dock
     const dock = h("div", "dock");
-    const dot = btn("dot mono", String(v.score), () => act.toggleWhy(), `Slop score ${v.score}. Click to see why. A quality score, not proof of AI generation.`);
+    const dot = btn("dot mono", String(v.score), () => {}, `Slop score ${v.score}. Click to see why. A quality score, not proof of AI generation.`);
+    dot.addEventListener("click", (e) => act.toggleWhy(e.detail === 0));
+    dot.setAttribute("aria-label", `Slop score ${v.score} out of 100. Show why.`);
+    dot.setAttribute("aria-haspopup", "dialog");
+    dot.setAttribute("aria-expanded", String(v.whyOpen));
+    dotEl = dot;
     dock.append(dot);
     if (v.voted) {
       const vt = h("span", "voted"); vt.append("You marked ", h("b", undefined, v.voted === "slop" ? "slop" : "not slop"));
       dock.append(vt, btn("act", "Undo", () => act.undo(), "Undo (Alt+U)"));
     } else {
-      dock.append(btn("act s", "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)"), btn("act n", "Not slop", () => act.vote("not_slop"), "Mark as not slop (Alt+N)"));
+      const vs = btn("act s", "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
+      const vn = btn("act n", "Not slop", () => act.vote("not_slop"), "Mark as not slop (Alt+N)");
+      vs.setAttribute("aria-label", "Mark this post as slop"); vn.setAttribute("aria-label", "Mark this post as not slop");
+      dock.append(vs, vn);
     }
     wrap.append(dock);
 
     // Why popover
     const why = h("div", "why");
+    why.setAttribute("role", "dialog");
+    why.setAttribute("aria-label", "Why this score");
+    why.tabIndex = -1;
+    whyEl = why;
     why.append(h("h4", undefined, `${v.state === "slop" ? "Slop" : v.state === "border" ? "Unsure" : "Looks fine"} · ${v.score}/100`),
       h("p", "lead", `${v.title}. Margin: ${marginLabel(v)}.`));
     const gauge = h("div", "gauge");
@@ -214,7 +229,11 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
   article.append(host);
   return {
     host,
-    setOpen(o) { if (o !== open) { open = o; wrap.classList.toggle("open", o); } },
+    setOpen(o) {
+      if (o !== open) { open = o; wrap.classList.toggle("open", o); wrap.querySelector(".strip")?.setAttribute("aria-expanded", String(o)); }
+    },
+    focusPanel() { whyEl?.focus({ preventScroll: true }); },
+    focusDot() { dotEl?.focus({ preventScroll: true }); },
     destroy() { host.remove(); }
   };
 }

@@ -45,14 +45,26 @@ function loadModel() {
   if (!modelLoaded) {
     modelLoaded = chrome.storage.local.get(["sdModel", "learn"]).then((r) => {
       model = r.learn === false ? null : r.sdModel || null;
+      localMemo.clear();
     });
   }
   return modelLoaded;
 }
-const local = (text) => SD.localScore(text, model || undefined);
+// A post is scored a few times per request (routing, hints, explanation); memoise by text.
+const localMemo = new Map();
+function local(text) {
+  let r = localMemo.get(text);
+  if (!r) {
+    r = SD.localScore(text, model || undefined);
+    if (localMemo.size >= 300) localMemo.delete(localMemo.keys().next().value);
+    localMemo.set(text, r);
+  }
+  return r;
+}
 
 async function refitModel() {
   const { sdVotes = [], learn } = await chrome.storage.local.get(["sdVotes", "learn"]);
+  localMemo.clear();
   if (learn === false || sdVotes.length < 6) {
     model = null;
     await chrome.storage.local.remove("sdModel");
@@ -70,7 +82,7 @@ chrome.storage.onChanged?.addListener((ch, area) => {
   if (area !== "local") return;
   if (ch.sdVotes || ch.learn) scheduleRefit();
   // A retrain done elsewhere (the settings page) takes effect here immediately.
-  if (ch.sdModel && !ch.sdVotes && !ch.learn) model = ch.sdModel.newValue || null;
+  if (ch.sdModel && !ch.sdVotes && !ch.learn) { model = ch.sdModel.newValue || null; localMemo.clear(); }
 });
 
 // ---- Local heuristics -------------------------------------------------------
@@ -120,17 +132,35 @@ async function addSpend(cost) {
 const QUEUE_MAX = 40;
 
 // ---- Usage stats (last 30 days) ----------------------------------------------
+// Counters and recent scores are buffered and written together, so scoring a post costs no
+// storage round trip of its own.
 let statChain = Promise.resolve();
+const pendingStats = {};
+let pendingScores = [];
+let flushTimer = null;
 function bumpStat(field, n = 1) {
+  pendingStats[field] = (pendingStats[field] || 0) + n;
+  scheduleFlush();
+}
+function scheduleFlush() {
+  if (!flushTimer) flushTimer = setTimeout(flushStats, 1500);
+}
+function flushStats() {
+  flushTimer = null;
+  const add = { ...pendingStats };
+  const scores = pendingScores;
+  for (const k of Object.keys(pendingStats)) delete pendingStats[k];
+  pendingScores = [];
+  if (!Object.keys(add).length && !scores.length) return;
   statChain = statChain.then(async () => {
-    const { sdStats = { days: {} } } = await chrome.storage.local.get("sdStats");
+    const { sdStats = { days: {} }, sdRecent = [] } = await chrome.storage.local.get(["sdStats", "sdRecent"]);
     const d = today();
     const row = sdStats.days[d] || { scanned: 0, filtered: 0, local: 0, spend: 0 };
-    row[field] = (row[field] || 0) + n;
+    for (const [k, v] of Object.entries(add)) row[k] = (row[k] || 0) + v;
     sdStats.days[d] = row;
     const keep = Object.keys(sdStats.days).sort().slice(-30);
     sdStats.days = Object.fromEntries(keep.map((k) => [k, sdStats.days[k]]));
-    await chrome.storage.local.set({ sdStats });
+    await chrome.storage.local.set({ sdStats, sdRecent: [...sdRecent, ...scores].slice(-300) });
   }).catch(() => {});
 }
 
@@ -588,14 +618,10 @@ async function analyzeInner({ text, ctx, refine }) {
   }
 }
 
-// Rolling list of recent shown scores, so the popup can preview what a sensitivity would fold.
-let recentChain = Promise.resolve();
+// Recent shown scores let the popup preview what a sensitivity would fold (flushed with stats).
 function noteScore(score) {
-  recentChain = recentChain.then(async () => {
-    const { sdRecent = [] } = await chrome.storage.local.get("sdRecent");
-    sdRecent.push(score);
-    await chrome.storage.local.set({ sdRecent: sdRecent.slice(-300) });
-  }).catch(() => {});
+  pendingScores.push(score);
+  scheduleFlush();
 }
 
 async function analyze(m) {

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Slop Detector",
-  "version": "2.1.0",
-  "description": "Flags low-effort, formulaic posts on X with a subjective 0-100 slop score using Jev via OpenRouter.",
+  "version": "2.2.0",
+  "description": "Quietly folds low-effort, formulaic and engagement-farming posts on X. On-device first, optional AI model, learns your taste.",
   "permissions": [
     "storage"
   ],

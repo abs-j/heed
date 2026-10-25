@@ -335,9 +335,11 @@ import { mountCard } from "./ui";
       vote: (label) => vote(article, r, label),
       undo: () => undo(article, r),
       peek: () => openPost(article),
-      toggleWhy: () => {
+      toggleWhy: (viaKeyboard) => {
         if (article.dataset.sdWhy === "1") delete article.dataset.sdWhy; else article.dataset.sdWhy = "1";
         render(article);
+        // Keyboard users land in the popover (or back on its trigger when it closes).
+        if (viaKeyboard) article._sdCard?.[article.dataset.sdWhy === "1" ? "focusPanel" : "focusDot"]();
       }
     });
   }
@@ -540,7 +542,11 @@ import { mountCard } from "./ui";
     else if (k === "KeyN" && !r.fb) vote(article, r, "not_slop");
     else if (k === "KeyU" && r.fb) undo(article, r);
     else if (k === "KeyP") { if (article.hasAttribute("data-sd-open")) closePost(article, true); else openPost(article); }
-    else if (k === "KeyW") { if (article.dataset.sdWhy === "1") delete article.dataset.sdWhy; else article.dataset.sdWhy = "1"; render(article); }
+    else if (k === "KeyW") {
+      if (article.dataset.sdWhy === "1") delete article.dataset.sdWhy; else article.dataset.sdWhy = "1";
+      render(article);
+      article._sdCard?.[article.dataset.sdWhy === "1" ? "focusPanel" : "focusDot"]();
+    }
     else return;
     e.preventDefault(); e.stopPropagation();
   }, true);
@@ -549,8 +555,13 @@ import { mountCard } from "./ui";
   function closeWhy() {
     document.querySelectorAll('article[data-sd-why="1"]').forEach((a) => { delete a.dataset.sdWhy; if (results.has(a)) render(a); });
   }
+  function closeWhyAndRefocus() {
+    const a = document.querySelector('article[data-sd-why="1"]');
+    closeWhy();
+    a?._sdCard?.focusDot();
+  }
   addEventListener("click", closeWhy);
-  addEventListener("keydown", (e) => { if (e.key === "Escape") closeWhy(); }, true);
+  addEventListener("keydown", (e) => { if (e.key === "Escape") closeWhyAndRefocus(); }, true);
 
   async function init() {
     const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence"]);
@@ -564,7 +575,15 @@ import { mountCard } from "./ui";
     document.documentElement.dataset.sdVersion = chrome.runtime.getManifest().version;
     scan();
     let t;
-    new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { applyTheme(); scan(); harvestProfilePage(); }, 150); })
+    // Theme is re-read at most every few seconds: reading computed style forces a style recalc.
+    let themeAt = 0;
+    new MutationObserver(() => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        if (Date.now() - themeAt > 3000) { themeAt = Date.now(); applyTheme(); }
+        scan(); harvestProfilePage();
+      }, 150);
+    })
       .observe(document.body, { childList: true, subtree: true });
     chrome.storage.onChanged.addListener((ch, area) => {
       if (area !== "local") return;

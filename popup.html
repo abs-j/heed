@@ -4,11 +4,11 @@
 <body><main>
   <header>
     <span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
-    <div class="ttl"><b>Slop Detector</b><span id="engine" class="sub"></span></div>
+    <div class="ttl"><h1>Slop Detector</h1><span id="engine" class="sub"></span></div>
     <label class="switch" title="Enabled"><input type="checkbox" id="enabled" aria-label="Enabled"><i></i></label>
   </header>
 
-  <p id="status" class="banner" hidden></p>
+  <p id="status" class="banner" role="status" hidden></p>
 
   <section class="tiles" aria-label="Today">
     <div class="tile"><b id="tScanned" class="mono">0</b><span>scanned</span></div>
@@ -17,7 +17,7 @@
   </section>
 
   <section class="spark" aria-label="Folded per day, last 7 days">
-    <svg id="spark" viewBox="0 0 224 36" preserveAspectRatio="none" role="img"></svg>
+    <svg id="spark" viewBox="0 0 224 36" preserveAspectRatio="none" role="img" aria-label="Posts folded per day over the last 7 days"></svg>
     <span class="sub">folded, last 7 days</span>
   </section>
 
