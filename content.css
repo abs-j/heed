@@ -1,81 +1,34 @@
-:root {
-  --sd-red: #f4212e; --sd-blue: #1d9bf0; --sd-fg: #0f1419; --sd-bg: #fff;
-  --sd-mute: #536471; --sd-border: #cfd9de;
-}
+/* Page-level rules only. Everything we draw (strip, chip, popover) lives in a
+   shadow root inside <sd-card> and is styled by src/content/ui.ts. */
+:root { --sd-fg: #0f1419; --sd-bg: #fff; --sd-mute: #536471; --sd-border: #cfd9de; }
 :root[data-sd-theme="dark"] { --sd-mute: #71767b; --sd-border: #2f3336; }
 
 .sd-hidden { display: none !important; }
+.sd-folded { display: none !important; }
 
-/* Collapsed slop post: one compact row, original content blurred behind it.
-   Hovering opens it with a height transition; leaving closes it again. */
+article[data-testid="tweet"][data-sd] { position: relative; }
+/* The card ignores the pointer itself, so hover is read off the post and handed in as a variable. */
+article[data-testid="tweet"][data-sd]:hover > sd-card, article[data-testid="tweet"][data-sd]:focus-within > sd-card { --dock-o: 1; }
+
+/* Folded slop: the post collapses to one row; its content stays in the DOM, blurred,
+   and a hover opens it with a height transition. */
 article[data-testid="tweet"].sd-collapsed {
-  position: relative; max-height: 72px; overflow: hidden;
-  transition: max-height .28s cubic-bezier(.2,.8,.2,1);
+  max-height: 64px; overflow: hidden;
+  transition: max-height .3s cubic-bezier(.2,.8,.2,1);
 }
-article.sd-collapsed > *:not(.sd-overlay) {
-  filter: blur(10px); opacity: .35; pointer-events: none; user-select: none;
-  transition: filter .22s ease, opacity .22s ease;
+article.sd-collapsed > *:not(sd-card) {
+  filter: blur(12px); opacity: .22; pointer-events: none; user-select: none;
+  transition: filter .24s ease, opacity .24s ease;
 }
-article.sd-collapsed.sd-open > *:not(.sd-overlay) {
+article.sd-collapsed.sd-open > *:not(sd-card) {
   filter: none; opacity: 1; pointer-events: auto; user-select: auto;
 }
-article.sd-collapsed:not(.sd-open) .sd-bar { display: none; }
 article.sd-dim { opacity: .45; transition: opacity .2s ease; }
 article.sd-dim:hover { opacity: 1; }
 
-.sd-overlay {
-  position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; gap: 14px;
-  padding: 0 16px; box-sizing: border-box; background: transparent;
-  transition: opacity .16s ease; cursor: default;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-}
-.sd-sticker {
-  flex: none; font-weight: 900; font-size: 30px; line-height: 1; letter-spacing: .06em;
-  color: #fff; background: var(--sd-red); padding: 6px 12px; border-radius: 6px;
-  border: 3px solid #fff; outline: 3px solid var(--sd-red); transform: rotate(-4deg);
-  box-shadow: 0 2px 8px rgba(0,0,0,.35);
-}
-.sd-sticker { transition: transform .2s ease; }
-.sd-overlay:hover .sd-sticker { transform: rotate(-2deg) scale(1.04); }
-article.sd-open > .sd-overlay { opacity: 0; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
-  article[data-testid="tweet"].sd-collapsed, article.sd-collapsed > *, .sd-overlay, .sd-sticker { transition: none !important; }
+  article[data-testid="tweet"].sd-collapsed, article.sd-collapsed > * { transition: none !important; }
 }
-.sd-info { flex: 1 1 auto; min-width: 0; }
-.sd-score { font-size: 15px; font-weight: 700; color: var(--sd-fg); line-height: 20px; }
-.sd-reason { font-size: 13px; color: var(--sd-mute); line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sd-show {
-  flex: none; font-size: 14px; font-weight: 700; color: var(--sd-fg); padding: 6px 14px;
-  border-radius: 9999px; border: 1px solid var(--sd-border);
-  background: var(--sd-bg);
-}
-.sd-overlay:hover .sd-show { background: rgba(29,155,240,.1); }
-
-/* Score + vote row under posts. */
-.sd-bar {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 0 4px;
-  width: 100%; max-width: 100%; box-sizing: border-box;
-  font: 400 13px/16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: var(--sd-mute);
-}
-.sd-chip { flex: none; cursor: pointer; font-family: inherit; font-size: 13px; line-height: 16px; background: transparent; font-weight: 700; padding: 2px 8px; border-radius: 9999px; border: 1px solid var(--sd-border); color: var(--sd-fg); }
-.sd-chip-slop { color: var(--sd-red); border-color: var(--sd-red); }
-.sd-chip-ok { color: var(--sd-blue); border-color: var(--sd-blue); }
-.sd-why { flex: 1 1 80px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sd-btn {
-  flex: none; font: 700 13px/16px inherit; font-family: inherit; cursor: pointer; padding: 3px 12px;
-  border-radius: 9999px; border: 1px solid var(--sd-border); background: transparent; color: var(--sd-fg);
-}
-.sd-btn:hover { background: rgba(29,155,240,.1); }
-.sd-btn-quiet { border-color: transparent; color: var(--sd-blue); }
 
 /* Profile lookups open X's hover card invisibly for a moment. */
 html.sd-probing [data-testid="HoverCard"] { opacity: 0 !important; pointer-events: none !important; }
-
-.sd-folded { display: none !important; }
-.sd-panel {
-  flex: 1 1 100%; margin-top: 2px; padding: 8px 10px; border: 1px solid var(--sd-border);
-  border-radius: 8px; color: var(--sd-fg); font-size: 13px; line-height: 18px;
-}
-.sd-line { overflow-wrap: anywhere; }
-.sd-line b { color: var(--sd-mute); font-weight: 700; }

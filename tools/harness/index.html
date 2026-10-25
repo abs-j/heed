@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Slop Detector harness</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body { margin: 0; background: #000; color: #e7e9ea; font: 15px/1.4 -apple-system, "Segoe UI", sans-serif; }
+  main { width: 600px; margin: 0 auto; border-inline: 1px solid #2f3336; min-height: 100vh; }
+  [data-testid="cellInnerDiv"] { border-bottom: 1px solid #2f3336; }
+  article { padding: 12px 16px; display: flex; gap: 12px; }
+  .av { width: 40px; height: 40px; border-radius: 50%; background: #333; flex: none; }
+  .nm { font-weight: 700; } .hd { color: #71767b; }
+  .acts { color: #71767b; margin-top: 10px; display: flex; gap: 40px; font-size: 13px; }
+  p { margin: 4px 0; }
+</style></head>
+<body><main id="feed"></main>
+<script>
+// Fake chrome.* so the real content script runs unmodified against a fake X timeline.
+const POSTS = [
+  ["alex_dev", "Alex Rivera", "Shipped the fix for the race condition in our job scheduler today. Two workers claimed the same row.", 12, "Specific, personal voice (no slop signals)", "local-ok"],
+  ["growthguru", "Growth Guru 🚀", "Here's the thing nobody talks about — success isn't about talent, it's about consistency.\n\nLike and follow for more. 🧵👇 #mindset", 97, "Clear slop pattern: stock hook phrase, engagement bait / call to action", "slop"],
+  ["homeprice", "Dana Whit", "Interesting take on where the housing market goes next, curious what people think", 48, "Vagueposting (61% match)", "border"],
+  ["groktroll", "Daily Facts", "Hey @grok pick 10 giant companies that won't exist in 2050. No mercy, one sentence each.", 92, "@grok prompt-bait", "slop"],
+  ["mia_runs", "Mia", "Marathon training week 9: 42 miles, one blister, zero regrets. Long run on Sunday was the first time it actually felt easy.", 8, "Authentic", "ok"],
+];
+const feed = document.getElementById("feed");
+POSTS.forEach(([h, n, t, , , ], i) => {
+  const c = document.createElement("div"); c.setAttribute("data-testid", "cellInnerDiv");
+  c.innerHTML = `<article data-testid="tweet"><div class="av"></div><div><div data-testid="User-Name"><span class="nm"></span> <a href="/${h}" class="hd">@${h}</a></div><div data-testid="tweetText"></div><div class="acts"><span>💬 12</span><span>🔁 4</span><span>♡ 88</span><span>📊 2.1K</span></div><a href="/${h}/status/${100 + i}"><time>1h</time></a></div></article>`;
+  c.querySelector(".nm").textContent = n; c.querySelector("[data-testid=tweetText]").innerText = t;
+  feed.append(c);
+});
+const store = { enabled: true, mode: new URLSearchParams(location.search).get("mode") || "blur", sensitivity: 60 };
+window.chrome = {
+  storage: { local: { get: async () => store, set: async () => {}, }, onChanged: { addListener() {} } },
+  runtime: { sendMessage: async (m) => {
+    if (m.type === "analyze") {
+      const p = POSTS.find((x) => m.text.startsWith(x[2].slice(0, 20)));
+      const [, , , score, explanation, kind] = p;
+      return { score, explanation, key: "k" + score, pattern: kind === "slop" ? "engagement_farming" : "authentic",
+        ...(kind.startsWith("local") ? { tier: "local", why: { hits: [], local: true } } :
+          { base: score, acct: kind === "slop" ? "engagement_aggregator" : "personal_individual", acctConf: .9, adjOk: true,
+            why: { hits: score > 80 ? ["stock hook phrase", "engagement bait / call to action", "thread / 👇 hook"] : [], provider: "anthropic", acctConf: 90, examples: 3 } }) };
+    }
+    if (m.type === "feedback") return { score: m.label === "slop" ? 100 : 0, fb: m.label, explanation: "You marked this as " + m.label.replace("_", " "), key: m.key };
+    return {};
+  } }
+};
+</script>
+<script src="../../lib.js"></script>
+<script src="../../content.js"></script>
+<link rel="stylesheet" href="../../content.css">
+</body></html>

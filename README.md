@@ -71,7 +71,14 @@ posts you view is sent to OpenRouter/TypeSafe for scoring. No other network acce
 - **Tiered by default:** the on-device classifier settles clear-cut posts (score ≤ 20 or ≥ 90) with no network call; only uncertain posts go to the AI model. Choose "AI model for every post" or "Local only" in settings.
 - **Providers:** Jev via OpenRouter (original), Anthropic (Claude), or any OpenAI-compatible endpoint (OpenAI, OpenRouter chat, Ollama, LM Studio; no key needed on localhost). Custom hosts ask for permission when you save. Spend cap currently only tracks Jev costs.
 
+## New look (v2)
+- Fine posts are left untouched. Slop folds into a one-row "receipt" (score, verdict, top reasons, Peek); a thin colour bar marks the edge of folded and borderline posts.
+- Hover any post for a small dock: score chip (click for the **why** popover with a gauge against your threshold, and every signal), **Slop** / **Not slop** votes, **Undo**.
+- Shortcuts, on the post under the pointer or with focus: <kbd>Alt</kbd>+<kbd>S</kbd> slop, <kbd>Alt</kbd>+<kbd>N</kbd> not slop, <kbd>Alt</kbd>+<kbd>U</kbd> undo, <kbd>Alt</kbd>+<kbd>P</kbd> peek, <kbd>Alt</kbd>+<kbd>W</kbd> why. <kbd>Esc</kbd> closes the popover.
+- All injected UI lives in a closed shadow root (`src/content/ui.ts`), so X's CSS can't affect it.
+- `tools/harness/index.html` renders the real content script against a fake timeline (serve the repo root, e.g. `python3 -m http.server`, and open `/tools/harness/index.html`).
+
 ## Development (v2 work in progress)
-- `lib.js` is **generated** from `src/lib/*.ts`: run `npm install && npm run build` after editing, then reload the extension.
+- `lib.js` and `content.js` are **generated** from `src/lib/*.ts` and `src/content/`: run `npm install && npm run build` after editing, then reload the extension.
 - Local classifier: `src/lib/features.ts` (≈40 hand-weighted features) + `src/lib/weights.json` (trained). `npm run train [backup.json]` retrains, `npm run eval` compares it with the frozen v1.5 heuristic on the seed and held-out corpora, `npm test` builds and runs everything.
 - The bundled corpora are synthetic and labelled by the author; use your own exported votes for real calibration. See REVAMP_PLAN.md.
