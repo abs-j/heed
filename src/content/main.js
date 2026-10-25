@@ -558,6 +558,8 @@ import { mountCard } from "./ui";
     if (MODES.includes(s.mode)) settings.mode = s.mode;
     if (typeof s.sensitivity === "number") settings.sensitivity = s.sensitivity;
     applyTheme();
+    // Lets you (and tooling) confirm from the page which build is actually injected.
+    document.documentElement.dataset.sdVersion = chrome.runtime.getManifest().version;
     scan();
     let t;
     new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { applyTheme(); scan(); harvestProfilePage(); }, 150); })

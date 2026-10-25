@@ -781,6 +781,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       if (MODES.includes(s.mode)) settings.mode = s.mode;
       if (typeof s.sensitivity === "number") settings.sensitivity = s.sensitivity;
       applyTheme();
+      document.documentElement.dataset.sdVersion = chrome.runtime.getManifest().version;
       scan();
       let t;
       new MutationObserver(() => {
