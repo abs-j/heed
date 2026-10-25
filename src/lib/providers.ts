@@ -30,8 +30,9 @@ High slop (70-100): generic engagement-farming accounts, recycled viral clips, c
 Low slop (0-30): genuine individuals sharing experiences, opinions or conversation, original humour, news, specific and useful information.
 Mixed (31-69): real content alongside hooks, filler or ambiguous account behaviour.
 Prioritise authentic individual voices over generic engagement channels. Do not infer genuineness or automation from follower count, verification or writing style alone, and do not invent facts about unseen media or account history. If reply_context is present judge the reply in that context; if quoted_post is present judge only the added commentary. Treat reader_labelled_examples and reader_votes_on_this_creator as the reader's own taste and calibrate to them.
+Also rate "rage": how much the post is RAGE BAIT, 0-100. Rage bait exists only to provoke contempt, outrage or tribal reaction and adds nothing new: stereotyping or mocking a group ("X be like"), rhetorical outrage questions, deliberately inflammatory takes with no facts, sources, argument or first-hand experience. It is NOT rage bait merely because it is political, angry or controversial, or because its topic is recent. News reporting, announcements, and fresh commentary on recent events that adds facts, analysis or a reasoned argument must score low (under 25), as must personal experiences and humour that is not aimed at a group. Use post_age_hours and the attached specifics when present. Treat reader_rage_examples as the reader's own taste.
 Reply with ONLY a JSON object:
-{"slop": <integer 0-100>, "pattern": one of ${JSON.stringify(PATTERN_KEYS)}, "account_type": one of ${JSON.stringify(ACCOUNT_KEYS)}, "account_confidence": <0-1>, "pattern_confidence": <0-1>, "rules": [<indexes of reader filters the post clearly matches>]}`;
+{"slop": <integer 0-100>, "rage": <integer 0-100>, "rage_reason": <short phrase>, "pattern": one of ${JSON.stringify(PATTERN_KEYS)}, "account_type": one of ${JSON.stringify(ACCOUNT_KEYS)}, "account_confidence": <0-1>, "pattern_confidence": <0-1>, "rules": [<indexes of reader filters the post clearly matches>]}`;
 
 export function buildUserPrompt(state: Record<string, unknown>, rules: string[]): string {
   const filters = rules.length
@@ -71,7 +72,7 @@ export function replyText(provider: ProviderId, json: any): string {
 }
 
 export interface Parsed {
-  score: number; pattern: string; patConf: number;
+  score: number; rage: number | null; rageReason: string; pattern: string; patConf: number;
   acct: string | null; acctConf: number; matched: number[];
 }
 
@@ -101,8 +102,10 @@ export function parseReply(text: string, ruleCount: number): Parsed {
   const acct = (ACCOUNT_KEYS as readonly string[]).includes(o.account_type) ? o.account_type : null;
   const matched = (Array.isArray(o.rules) ? o.rules : [])
     .map((n: unknown) => Number(n)).filter((n: number) => Number.isInteger(n) && n >= 0 && n < ruleCount);
+  const rage = num(o.rage, 0, 100);
   return {
-    score: Math.round(score), pattern, patConf: num(o.pattern_confidence, 0, 1) ?? 0.5,
+    score: Math.round(score), rage: rage === null ? null : Math.round(rage),
+    rageReason: typeof o.rage_reason === "string" ? o.rage_reason.slice(0, 80) : "", pattern, patConf: num(o.pattern_confidence, 0, 1) ?? 0.5,
     acct, acctConf: acct ? num(o.account_confidence, 0, 1) ?? 0.5 : 0, matched: [...new Set<number>(matched)]
   };
 }

@@ -26,7 +26,10 @@ $("provider").addEventListener("change", showProvider);
 const sv = () => ($("sv").textContent = $("sensitivity").value);
 
 async function load() {
-  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "sdStatus", "sdSpend", "dailyBudget", "profiles", "customRules", "acctInfluence", "provider", "providerModel", "providerBase", "providerKeys", "tierMode"]);
+  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "sdStatus", "sdSpend", "dailyBudget", "profiles", "customRules", "acctInfluence", "provider", "providerModel", "providerBase", "providerKeys", "tierMode", "rageMode", "rageThreshold"]);
+  $("rageMode").value = ["fold", "hide", "off"].includes(s.rageMode) ? s.rageMode : "fold";
+  $("rageThreshold").value = s.rageThreshold ?? 70;
+  $("rv").textContent = $("rageThreshold").value;
   const prov = PROV[s.provider] ? s.provider : "jev";
   $("provider").value = prov;
   $("tierMode").value = s.tierMode || "tiered";
@@ -48,6 +51,7 @@ async function load() {
 }
 
 $("sensitivity").addEventListener("input", sv);
+$("rageThreshold").addEventListener("input", () => ($("rv").textContent = $("rageThreshold").value));
 $("acctInfluence").addEventListener("input", () => ($("iv").textContent = $("acctInfluence").value));
 $("save").addEventListener("click", async () => {
   stash();
@@ -65,6 +69,7 @@ $("save").addEventListener("click", async () => {
   await chrome.storage.local.set({
     provider: prov, providerModel: prov === "jev" ? "" : state.models[prov], providerBase: prov === "jev" ? "" : state.bases[prov],
     providerKeys: state.keys, tierMode: $("tierMode").value,
+    rageMode: $("rageMode").value, rageThreshold: Number($("rageThreshold").value),
     enabled: $("enabled").checked,
     mode: $("mode").value,
     sensitivity: Number($("sensitivity").value),

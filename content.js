@@ -4,7 +4,7 @@
   // src/content/ui.ts
   var CSS = `
 :host { all: initial; position: absolute; inset: 0; z-index: 5; pointer-events: none; display: block;
-  --slop: var(--sd-slop, #f2545b); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
+  --slop: var(--sd-slop, #f2545b); --rage: var(--sd-rage, #f0883e); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
   font: 400 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", Inter, Roboto, sans-serif;
   color: var(--sd-fg, #0f1419); }
 * { box-sizing: border-box; }
@@ -57,7 +57,7 @@ button:focus-visible, .strip:focus-visible { outline: 2px solid var(--c, var(--s
 .dot:hover { background: color-mix(in srgb, var(--sd-fg, #000) 8%, transparent); }
 .act { padding: 3px 9px; border-radius: 999px; font-weight: 650; font-size: 12px; color: var(--sd-mute, #536471); }
 .act:hover { background: color-mix(in srgb, var(--sd-fg, #000) 9%, transparent); color: var(--sd-fg, #0f1419); }
-.act.lead { color: var(--sd-fg, #0f1419); } .act.s:hover { color: var(--slop); } .act.n:hover { color: var(--ok); }
+.act.lead { color: var(--sd-fg, #0f1419); } .act.s:hover { color: var(--slop); } .act.r:hover { color: var(--rage); } .act.n:hover { color: var(--ok); }
 .voted { padding: 3px 8px 3px 10px; font-size: 12px; color: var(--sd-mute, #536471); }
 .voted b { color: var(--sd-fg, #0f1419); font-weight: 650; }
 
@@ -84,8 +84,8 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 `;
   var SVG_CHEVRON = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>';
-  var colorOf = (v) => v.state === "slop" ? "var(--slop)" : v.state === "border" ? "var(--warn)" : "var(--ok)";
-  var verdict = (v) => v.state === "slop" ? "SLOP" : v.state === "border" ? "UNSURE" : "OK";
+  var colorOf = (v) => v.state === "slop" ? "var(--slop)" : v.state === "rage" ? "var(--rage)" : v.state === "border" ? "var(--warn)" : "var(--ok)";
+  var verdict = (v) => v.state === "slop" ? "SLOP" : v.state === "rage" ? "RAGE" : v.state === "border" ? "UNSURE" : "OK";
   function h(tag, cls, text) {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -131,7 +131,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       const strip = h("div", "strip");
       strip.setAttribute("role", "button");
       strip.tabIndex = 0;
-      strip.setAttribute("aria-label", `Folded post, slop score ${v.score}. ${v.title}. Press Enter to peek.`);
+      strip.setAttribute("aria-label", `Folded post, ${v.state === "rage" ? "rage bait" : "slop"} score ${v.score}. ${v.title}. Press Enter to peek.`);
       strip.setAttribute("aria-expanded", String(open));
       const score = h("div", "score mono");
       score.append(h("b", void 0, String(v.score)), h("i", void 0, verdict(v)));
@@ -162,7 +162,21 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       dot.setAttribute("aria-expanded", String(v.whyOpen));
       dotEl = dot;
       dock.append(dot);
-      if (v.voted) {
+      const rageBtn = (label) => {
+        const b = btn("act r", label === "rage" ? "Rage bait" : "Not rage bait", () => act.rage(label), label === "rage" ? "Mark as rage bait (Alt+R)" : "This isn't rage bait");
+        b.setAttribute("aria-label", label === "rage" ? "Mark this post as rage bait" : "This post is not rage bait");
+        return b;
+      };
+      if (v.rageVoted && !v.voted) {
+        const vt = h("span", "voted");
+        vt.append("Marked ", h("b", void 0, v.rageVoted === "rage" ? "rage bait" : "not rage bait"));
+        dock.append(vt, btn("act", "Undo", () => act.rageUndo(), "Undo (Alt+R)"));
+      } else if (v.state === "rage" && !v.voted) {
+        dock.append(rageBtn("not_rage"));
+        const vs = btn("act s", "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
+        vs.setAttribute("aria-label", "Mark this post as slop");
+        dock.append(vs);
+      } else if (v.voted) {
         const vt = h("span", "voted");
         vt.append("Marked ", h("b", void 0, v.voted === "slop" ? "slop" : "not slop"));
         dock.append(vt, btn("act", "Undo", () => act.undo(), "Undo (Alt+U)"));
@@ -170,6 +184,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         const vs = btn("act s" + (v.state === "ok" ? " lead" : ""), v.state === "ok" ? "Mark slop" : "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
         vs.setAttribute("aria-label", "Mark this post as slop");
         dock.append(vs);
+        if (v.rageOn) dock.append(rageBtn("rage"));
         if (v.state !== "ok") {
           const vn = btn("act n", "Not slop", () => act.vote("not_slop"), "Mark as not slop (Alt+N)");
           vn.setAttribute("aria-label", "Mark this post as not slop");
@@ -183,7 +198,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       why.tabIndex = -1;
       whyEl = why;
       why.append(
-        h("h4", void 0, `${v.state === "slop" ? "Slop" : v.state === "border" ? "Unsure" : "Looks fine"} \xB7 ${v.score}/100`),
+        h("h4", void 0, `${v.state === "slop" ? "Slop" : v.state === "rage" ? "Rage bait" : v.state === "border" ? "Unsure" : "Looks fine"} \xB7 ${v.score}/100`),
         h("p", "lead", `${v.title}. Margin: ${marginLabel(v)}.`)
       );
       const gauge = h("div", "gauge");
@@ -238,7 +253,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
   // src/content/main.js
   (() => {
     const MIN_CHARS = 3;
-    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: true, acctInfluence: 100 };
+    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: true, acctInfluence: 100, rageMode: "fold", rageThreshold: 70 };
     const BORDER = [35, 75];
     const health = { articles: 0, handles: 0, probes: 0, probesOk: 0, noted: "" };
     function reportHealth() {
@@ -278,6 +293,8 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         if (name) ctx.name = name.slice(0, 80);
         ctx.verified = !!user.querySelector('[data-testid="icon-verified"]');
       }
+      const posted = a.querySelector("time")?.getAttribute("datetime");
+      if (posted) ctx.postedAt = posted;
       const statusHref = a.querySelector('a[href*="/status/"] time')?.closest("a")?.getAttribute("href") || "";
       const pid = statusHref.match(/\/status\/(\d+)/);
       if (pid) ctx.postId = pid[1];
@@ -517,6 +534,10 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       }
       return article._sdFolded.length;
     }
+    const rageActive = () => settings.rageMode !== "off" && settings.mode !== "scores";
+    const isRage = (r) => rageActive() && typeof r.rage === "number" && r.rage >= settings.rageThreshold && !r.rageFb?.startsWith?.("not");
+    const rageTitle = (r) => "Rage bait" + (r.rageReason ? `: ${r.rageReason}` : " \xB7 nothing new in this post");
+    const keepRage = (r) => ({ rage: r.rage, rageSrc: r.rageSrc, rageHits: r.rageHits, rageNews: r.rageNews, rageReason: r.rageReason, rageFb: r.rageFb });
     const isSlop = (r) => r.fb ? r.fb === "slop" : !!r.rules?.length || r.score >= settings.sensitivity;
     const BORDER_BAND = 15;
     function render(article) {
@@ -546,20 +567,35 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         }
         if (settings.mode === "dim") article.setAttribute("data-sd-dim", "");
       }
+      if (!slop && isRage(r)) {
+        if (settings.rageMode === "hide") {
+          const cell = article.closest('[data-testid="cellInnerDiv"]');
+          if (cell) {
+            cell.setAttribute("data-sd-hidden", "");
+            logFiltered(article, { ...r, score: r.rage, explanation: rageTitle(r) });
+            return;
+          }
+        }
+        collapse(article, r, { wasCollapsed, wasOpen, fullHeight });
+        logFiltered(article, { ...r, score: r.rage, explanation: rageTitle(r) });
+        return;
+      }
       mount(article, r, { strip: false, folded: 0 });
     }
-    const stateOf = (r, slop) => slop ? "slop" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok";
+    const stateOf = (r, slop) => slop ? "slop" : isRage(r) ? "rage" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok";
     function mount(article, r, { strip, folded }) {
       const slop = isSlop(r);
       const state = stateOf(r, slop);
       article.dataset.sd = state;
       article._sdCard = mountCard(article, {
         state,
-        score: r.score,
-        threshold: settings.sensitivity,
-        title: r.explanation || "",
+        score: state === "rage" ? r.rage : r.score,
+        threshold: state === "rage" ? settings.rageThreshold : settings.sensitivity,
+        title: state === "rage" ? rageTitle(r) : r.explanation || "",
+        rageOn: rageActive(),
+        rageVoted: r.rageFb,
         handle: strip ? handleOf(article) : void 0,
-        signals: r.rules?.length ? r.rules : r.why?.hits || [],
+        signals: state === "rage" ? r.rageHits || [] : r.rules?.length ? r.rules : r.why?.hits || [],
         details: detailsOf(r),
         folded,
         strip,
@@ -570,6 +606,8 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       }, {
         vote: (label) => vote(article, r, label),
         undo: () => undo(article, r),
+        rage: (label) => rageVote(article, r, label),
+        rageUndo: () => rageUndo(article, r),
         peek: () => openPost(article),
         toggleWhy: (viaKeyboard) => {
           if (article.dataset.sdWhy === "1") delete article.dataset.sdWhy;
@@ -695,12 +733,26 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     async function vote(article, r, label) {
       const res = await chrome.runtime.sendMessage({ type: "feedback", key: r.key, text: r.text, label, handle: contextOf(article).handle });
       if (!res || res.error) return;
-      results.set(article, { ...res, text: r.text });
+      results.set(article, { ...res, ...keepRage(r), text: r.text });
       delete article.dataset.sdPeek;
       if (label === "slop" && settings.mode === "blur") article.setAttribute("data-sd-open", "");
       if (label === "not_slop") article.dataset.sdRevealed = "1";
       else delete article.dataset.sdRevealed;
       render(article);
+    }
+    async function rageVote(article, r, label) {
+      const res = await chrome.runtime.sendMessage({ type: "rageVote", key: r.key, text: r.text, label, handle: contextOf(article).handle });
+      if (!res || res.error) return;
+      results.set(article, { ...r, rage: label === "rage" ? 100 : 0, rageSrc: "you", rageFb: label });
+      delete article.dataset.sdPeek;
+      if (label === "rage" && settings.rageMode === "fold") article.setAttribute("data-sd-open", "");
+      render(article);
+    }
+    async function rageUndo(article, r) {
+      await chrome.runtime.sendMessage({ type: "rageUnvote", key: r.key });
+      results.delete(article);
+      clearDecor(article);
+      request(article);
     }
     async function undo(article, r) {
       const res = await chrome.runtime.sendMessage({ type: "unvote", key: r.key });
@@ -738,6 +790,11 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       if (acct) line("Account", `${ACCT[acct] || acct}${w.acctConf ? ` (${w.acctConf}% sure)` : ""}`);
       if (r.profiled) line("Second pass", "re-scored with the creator's profile");
       if (r.rules?.length) line("Your filters", r.rules.join(", "));
+      if (rageActive() && typeof r.rage === "number") {
+        const who = r.rageSrc === "you" ? "your vote" : r.rageSrc === "model" ? "the AI model" : "on-device";
+        line("Rage bait", `${r.rage}/100 (${who})` + (r.rageReason && r.rageSrc !== "you" ? `: ${r.rageReason}` : ""));
+        if (r.rageNews >= 0.3) line("Novelty", "reads like reporting (sources, numbers or dates), so it is given the benefit of the doubt");
+      }
       if (w.profile) line("Profile read", w.profile);
       else if (!r.local && !r.creator && r.tier !== "local") line("Profile", "not available; judged from the post and handle");
       if (w.reply) line("Context", "judged as a reply");
@@ -783,7 +840,10 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       if (k === "KeyS" && !r.fb) vote(article, r, "slop");
       else if (k === "KeyN" && !r.fb) vote(article, r, "not_slop");
       else if (k === "KeyU" && r.fb) undo(article, r);
-      else if (k === "KeyP") {
+      else if (k === "KeyR" && rageActive()) {
+        if (r.rageFb) rageUndo(article, r);
+        else rageVote(article, r, "rage");
+      } else if (k === "KeyP") {
         if (article.hasAttribute("data-sd-open")) closePost(article, true);
         else openPost(article);
       } else if (k === "KeyW") {
@@ -811,7 +871,9 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       if (e.key === "Escape") closeWhyAndRefocus();
     }, true);
     async function init() {
-      const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence"]);
+      const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold"]);
+      if (["fold", "hide", "off"].includes(s.rageMode)) settings.rageMode = s.rageMode;
+      if (typeof s.rageThreshold === "number") settings.rageThreshold = s.rageThreshold;
       if (s.profiles !== void 0) settings.profiles = s.profiles;
       if (typeof s.acctInfluence === "number") settings.acctInfluence = s.acctInfluence;
       if (s.enabled !== void 0) settings.enabled = s.enabled;
@@ -846,6 +908,14 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         }
         if (ch.sensitivity) {
           settings.sensitivity = ch.sensitivity.newValue;
+          dirty = true;
+        }
+        if (ch.rageMode && ["fold", "hide", "off"].includes(ch.rageMode.newValue)) {
+          settings.rageMode = ch.rageMode.newValue;
+          dirty = true;
+        }
+        if (ch.rageThreshold) {
+          settings.rageThreshold = Number(ch.rageThreshold.newValue) || 70;
           dirty = true;
         }
         if (ch.profiles) settings.profiles = ch.profiles.newValue;

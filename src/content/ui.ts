@@ -5,7 +5,7 @@
 //   why    - a popover with the score gauge and every signal behind the number
 // Fine posts get a card with a dock only, so by default they look untouched.
 
-export type PostState = "slop" | "border" | "ok";
+export type PostState = "slop" | "rage" | "border" | "ok";
 
 export interface View {
   state: PostState;
@@ -19,12 +19,16 @@ export interface View {
   strip: boolean;                // show the folded receipt row
   chipAlways: boolean;           // dock visible without hovering
   voted?: "slop" | "not_slop";
+  rageOn: boolean;               // rage-bait filter is active, so the Rage bait action is offered
+  rageVoted?: "rage" | "not_rage";
   whyOpen: boolean;
 }
 
 export interface Actions {
   vote(label: "slop" | "not_slop"): void;
   undo(): void;
+  rage(label: "rage" | "not_rage"): void;
+  rageUndo(): void;
   peek(): void;
   toggleWhy(viaKeyboard?: boolean): void;
 }
@@ -33,7 +37,7 @@ export interface Card { host: HTMLElement; setOpen(open: boolean): void; focusPa
 
 const CSS = `
 :host { all: initial; position: absolute; inset: 0; z-index: 5; pointer-events: none; display: block;
-  --slop: var(--sd-slop, #f2545b); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
+  --slop: var(--sd-slop, #f2545b); --rage: var(--sd-rage, #f0883e); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
   font: 400 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", Inter, Roboto, sans-serif;
   color: var(--sd-fg, #0f1419); }
 * { box-sizing: border-box; }
@@ -86,7 +90,7 @@ button:focus-visible, .strip:focus-visible { outline: 2px solid var(--c, var(--s
 .dot:hover { background: color-mix(in srgb, var(--sd-fg, #000) 8%, transparent); }
 .act { padding: 3px 9px; border-radius: 999px; font-weight: 650; font-size: 12px; color: var(--sd-mute, #536471); }
 .act:hover { background: color-mix(in srgb, var(--sd-fg, #000) 9%, transparent); color: var(--sd-fg, #0f1419); }
-.act.lead { color: var(--sd-fg, #0f1419); } .act.s:hover { color: var(--slop); } .act.n:hover { color: var(--ok); }
+.act.lead { color: var(--sd-fg, #0f1419); } .act.s:hover { color: var(--slop); } .act.r:hover { color: var(--rage); } .act.n:hover { color: var(--ok); }
 .voted { padding: 3px 8px 3px 10px; font-size: 12px; color: var(--sd-mute, #536471); }
 .voted b { color: var(--sd-fg, #0f1419); font-weight: 650; }
 
@@ -115,8 +119,8 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
 
 const SVG_CHEVRON = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>';
 
-const colorOf = (v: View) => (v.state === "slop" ? "var(--slop)" : v.state === "border" ? "var(--warn)" : "var(--ok)");
-const verdict = (v: View) => (v.state === "slop" ? "SLOP" : v.state === "border" ? "UNSURE" : "OK");
+const colorOf = (v: View) => (v.state === "slop" ? "var(--slop)" : v.state === "rage" ? "var(--rage)" : v.state === "border" ? "var(--warn)" : "var(--ok)");
+const verdict = (v: View) => (v.state === "slop" ? "SLOP" : v.state === "rage" ? "RAGE" : v.state === "border" ? "UNSURE" : "OK");
 
 function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const n = document.createElement(tag);
@@ -167,7 +171,7 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
     const strip = h("div", "strip");
     strip.setAttribute("role", "button");
     strip.tabIndex = 0;
-    strip.setAttribute("aria-label", `Folded post, slop score ${v.score}. ${v.title}. Press Enter to peek.`);
+    strip.setAttribute("aria-label", `Folded post, ${v.state === "rage" ? "rage bait" : "slop"} score ${v.score}. ${v.title}. Press Enter to peek.`);
     strip.setAttribute("aria-expanded", String(open));
     const score = h("div", "score mono"); score.append(h("b", undefined, String(v.score)), h("i", undefined, verdict(v)));
     const info = h("div", "info");
@@ -191,7 +195,20 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
     dot.setAttribute("aria-expanded", String(v.whyOpen));
     dotEl = dot;
     dock.append(dot);
-    if (v.voted) {
+    const rageBtn = (label: "rage" | "not_rage") => {
+      const b = btn("act r", label === "rage" ? "Rage bait" : "Not rage bait", () => act.rage(label), label === "rage" ? "Mark as rage bait (Alt+R)" : "This isn't rage bait");
+      b.setAttribute("aria-label", label === "rage" ? "Mark this post as rage bait" : "This post is not rage bait");
+      return b;
+    };
+    if (v.rageVoted && !v.voted) {
+      const vt = h("span", "voted"); vt.append("Marked ", h("b", undefined, v.rageVoted === "rage" ? "rage bait" : "not rage bait"));
+      dock.append(vt, btn("act", "Undo", () => act.rageUndo(), "Undo (Alt+R)"));
+    } else if (v.state === "rage" && !v.voted) {
+      dock.append(rageBtn("not_rage"));
+      const vs = btn("act s", "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
+      vs.setAttribute("aria-label", "Mark this post as slop");
+      dock.append(vs);
+    } else if (v.voted) {
       const vt = h("span", "voted"); vt.append("Marked ", h("b", undefined, v.voted === "slop" ? "slop" : "not slop"));
       dock.append(vt, btn("act", "Undo", () => act.undo(), "Undo (Alt+U)"));
     } else {
@@ -199,6 +216,7 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
       const vs = btn("act s" + (v.state === "ok" ? " lead" : ""), v.state === "ok" ? "Mark slop" : "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
       vs.setAttribute("aria-label", "Mark this post as slop");
       dock.append(vs);
+      if (v.rageOn) dock.append(rageBtn("rage"));
       if (v.state !== "ok") {
         const vn = btn("act n", "Not slop", () => act.vote("not_slop"), "Mark as not slop (Alt+N)");
         vn.setAttribute("aria-label", "Mark this post as not slop");
@@ -213,7 +231,7 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
     why.setAttribute("aria-label", "Why this score");
     why.tabIndex = -1;
     whyEl = why;
-    why.append(h("h4", undefined, `${v.state === "slop" ? "Slop" : v.state === "border" ? "Unsure" : "Looks fine"} · ${v.score}/100`),
+    why.append(h("h4", undefined, `${v.state === "slop" ? "Slop" : v.state === "rage" ? "Rage bait" : v.state === "border" ? "Unsure" : "Looks fine"} · ${v.score}/100`),
       h("p", "lead", `${v.title}. Margin: ${marginLabel(v)}.`));
     const gauge = h("div", "gauge");
     const pin = h("div", "pin"); pin.style.left = `${v.score}%`;

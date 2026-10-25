@@ -82,3 +82,22 @@ test("short posts are scored on-device (markable by hand) and never call the API
   assert.equal(typeof r.score, "number");
   assert.ok(r.key);
 });
+
+test("rage bait: scored on-device with no key, AI answer used when present, votes override both", async () => {
+  const BAITY = 'Muslims be like "Ramadan is so hard" but its literally just skipping lunch for a month? Your "fast" only lasts like 10 hours!';
+  const NEWS = "JUST IN: The Senate voted 52-48 to confirm the nominee, according to a statement from the majority leader's office.";
+  const send = boot({}, ok({}));
+  const a = await send({ type: "analyze", text: BAITY, ctx: { postId: "r1" } });
+  assert.equal(a.rageSrc, "local"); assert.ok(a.rage >= 60, `rage ${a.rage}`);
+  const n = await send({ type: "analyze", text: NEWS, ctx: { postId: "r2", postedAt: new Date(Date.now() - 3600e3).toISOString() } });
+  assert.ok(n.rage < 30, `news rage ${n.rage}`);
+  // a vote overrides the score and survives re-analysis
+  await send({ type: "rageVote", key: n.key, text: NEWS, label: "rage" });
+  assert.equal((await send({ type: "analyze", text: NEWS, ctx: { postId: "r2" } })).rage, 100);
+  await send({ type: "rageUnvote", key: n.key });
+  assert.ok((await send({ type: "analyze", text: NEWS, ctx: { postId: "r2" } })).rage < 30);
+  // the AI model's rage answer wins over the on-device guess
+  const withKey = boot({ provider: "anthropic", providerKeys: { anthropic: "k" }, tierMode: "llm" }, anth({ slop: 30, rage: 12, rage_reason: "reasoned reply" }));
+  const m = await withKey({ type: "analyze", text: "Honestly I think the policy is wrong, and here is why: the numbers don't add up in the third year.", ctx: { postId: "r3" } });
+  assert.equal(m.rage, 12); assert.equal(m.rageSrc, "model"); assert.equal(m.rageReason, "reasoned reply");
+});

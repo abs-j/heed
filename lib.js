@@ -9,7 +9,7 @@
 
   // src/lib/features.ts
   var sat = (n, k) => Math.min(1, n / k);
-  var count = (s, re2) => (s.match(re2) || []).length;
+  var count = (s, re3) => (s.match(re3) || []).length;
   function makeCtx(text) {
     const t = text.replace(/\r/g, "").trim();
     const words = t.toLowerCase().match(/[a-z0-9@#'’]+/g) || [];
@@ -490,8 +490,9 @@ High slop (70-100): generic engagement-farming accounts, recycled viral clips, c
 Low slop (0-30): genuine individuals sharing experiences, opinions or conversation, original humour, news, specific and useful information.
 Mixed (31-69): real content alongside hooks, filler or ambiguous account behaviour.
 Prioritise authentic individual voices over generic engagement channels. Do not infer genuineness or automation from follower count, verification or writing style alone, and do not invent facts about unseen media or account history. If reply_context is present judge the reply in that context; if quoted_post is present judge only the added commentary. Treat reader_labelled_examples and reader_votes_on_this_creator as the reader's own taste and calibrate to them.
+Also rate "rage": how much the post is RAGE BAIT, 0-100. Rage bait exists only to provoke contempt, outrage or tribal reaction and adds nothing new: stereotyping or mocking a group ("X be like"), rhetorical outrage questions, deliberately inflammatory takes with no facts, sources, argument or first-hand experience. It is NOT rage bait merely because it is political, angry or controversial, or because its topic is recent. News reporting, announcements, and fresh commentary on recent events that adds facts, analysis or a reasoned argument must score low (under 25), as must personal experiences and humour that is not aimed at a group. Use post_age_hours and the attached specifics when present. Treat reader_rage_examples as the reader's own taste.
 Reply with ONLY a JSON object:
-{"slop": <integer 0-100>, "pattern": one of ${JSON.stringify(PATTERN_KEYS)}, "account_type": one of ${JSON.stringify(ACCOUNT_KEYS)}, "account_confidence": <0-1>, "pattern_confidence": <0-1>, "rules": [<indexes of reader filters the post clearly matches>]}`;
+{"slop": <integer 0-100>, "rage": <integer 0-100>, "rage_reason": <short phrase>, "pattern": one of ${JSON.stringify(PATTERN_KEYS)}, "account_type": one of ${JSON.stringify(ACCOUNT_KEYS)}, "account_confidence": <0-1>, "pattern_confidence": <0-1>, "rules": [<indexes of reader filters the post clearly matches>]}`;
   function buildUserPrompt(state, rules) {
     const filters = rules.length ? `
 Reader-defined filters (report the index of any the post CLEARLY matches in "rules"):
@@ -556,8 +557,11 @@ ${JSON.stringify(state)}${filters}`;
     const pattern = PATTERN_KEYS.includes(o.pattern) ? o.pattern : "authentic";
     const acct = ACCOUNT_KEYS.includes(o.account_type) ? o.account_type : null;
     const matched = (Array.isArray(o.rules) ? o.rules : []).map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 0 && n < ruleCount);
+    const rage = num(o.rage, 0, 100);
     return {
       score: Math.round(score),
+      rage: rage === null ? null : Math.round(rage),
+      rageReason: typeof o.rage_reason === "string" ? o.rage_reason.slice(0, 80) : "",
       pattern,
       patConf: num(o.pattern_confidence, 0, 1) ?? 0.5,
       acct,
@@ -569,21 +573,180 @@ ${JSON.stringify(state)}${filters}`;
   // src/lib/router.ts
   var router_exports = {};
   __export(router_exports, {
+    RAGE_SURE: () => RAGE_SURE,
     TIER_DEFAULTS: () => TIER_DEFAULTS,
     route: () => route
   });
+  var RAGE_SURE = { low: 25, high: 85 };
   var TIER_DEFAULTS = { mode: "tiered", low: 20, high: 90 };
   function route(localScore2, o) {
     if (!o.llmReady) return { use: "local", reason: "no-llm" };
     if (o.mode === "local") return { use: "local", reason: "local-only" };
     if (o.mode === "tiered") {
-      if (localScore2 <= o.low) return { use: "local", reason: "confident-ok" };
+      const rageSure = !o.rage?.on || o.rage.score <= RAGE_SURE.low || o.rage.score >= RAGE_SURE.high;
+      if (rageSure && localScore2 <= o.low) return { use: "local", reason: "confident-ok" };
       if (localScore2 >= o.high) return { use: "local", reason: "confident-slop" };
     }
     return { use: "llm" };
   }
 
+  // src/lib/rage.ts
+  var rage_exports = {};
+  __export(rage_exports, {
+    RAGE_FEATURES: () => RAGE_FEATURES,
+    RAGE_PRIOR: () => RAGE_PRIOR,
+    localRage: () => localRage,
+    rageVector: () => rageVector,
+    refitRage: () => refitRage
+  });
+  var GROUP = "muslims?|christians?|jews|jewish people|atheists?|white people|black people|whites|asians?|men|women|males?|females?|girls|guys|boys|feminists?|liberals?|conservatives?|republicans?|democrats?|leftists?|libs|maga|boomers?|millennials?|gen ?z|zoomers?|immigrants?|americans?|europeans?|indians?|chinese|russians?|vegans?|teachers?|landlords?|rich people|poor people|single moms?|truck drivers?|gamers?|cat people|dog people|android users|iphone users|remote workers|tourists?|gym bros?|rich kids";
+  var sat2 = (n, k) => Math.min(1, n / k);
+  var count2 = (s, re3) => (s.match(re3) || []).length;
+  var re2 = (r, k = 1) => (c) => sat2(count2(c.text, r), k);
+  var RAGE_FEATURES = [
+    // ---- provocation
+    {
+      id: "targets_group",
+      label: "sweeping claim about a group",
+      prior: 1.6,
+      fn: re2(new RegExp(`\\b(?:${GROUP})\\b(?:\\s+\\w+){0,2}\\s+(?:are|is|be|always|never|will|can'?t|just|really|only|actually|when|think|love|hate|literally|only care|out here)\\b`, "gi"), 2)
+    },
+    {
+      id: "mockery",
+      label: "'X be like' mockery template",
+      prior: 1.9,
+      fn: re2(new RegExp(`\\bbe like\\b|\\btell me you'?re\\b|\\bimagine being\\b|\\b(\\w+):\\s*["'\u201C][^"'\u201D]+["'\u201D][^.?!]*\\.?\\s*(?:also|and)\\s+\\1:|\\bwhen (?:you|they|someone|a (?:man|woman|guy|girl))\\b[^:]{0,40}:\\s*\\p{Extended_Pictographic}`, "giu"))
+    },
+    {
+      id: "rhetorical",
+      label: "rhetorical outrage question",
+      prior: 1.9,
+      fn: re2(/\bwhy (?:are|do|does|is|would|can'?t)\s+(?:all |every |most |the |these |so many )?\w+(?:\s+\w+){0,3}\s+(?:so|always|only|never|even|just)\b|\b(?:or something|or what|or nah|am i wrong|am i the only one|can someone explain|explain (?:this|why)|genuinely asking)\b/gi)
+    },
+    {
+      id: "challenge",
+      label: "challenge to fight",
+      prior: 1.8,
+      fn: re2(/\b(?:fight me|change my mind|prove me wrong|ratio\b|come at me|say it with me|cope harder|the cope|seethe|sorry not sorry|unfollow me|not a joke|and you know it|wake up|die on this hill|period\.)/gi, 2)
+    },
+    {
+      id: "contempt",
+      label: "contempt and name-calling",
+      prior: 1.4,
+      fn: re2(/\b(?:stupid|dumb|idiots?|clowns?|braindead|brain dead|delusional|pathetic|insufferable|parasites?|leeches|bootlickers?|psychopaths?|morons?|trash|garbage|disgusting|mid|compensating|cope|meltdown|glorified)\b/gi, 2)
+    },
+    {
+      id: "us_vs_them",
+      label: "us-vs-them framing",
+      prior: 1.2,
+      fn: re2(/\b(?:they|the (?:left|right|elites|media)) (?:want|hate|are lying|don'?t want|are hiding)\b|\bshare before\b|\bnobody is talking about\b|\bnot one politician\b|\bsheep\b|\bpart of the problem\b/gi)
+    },
+    { id: "anger_emoji", label: "anger emoji", prior: 0.9, fn: re2(/[😡🤬😤🙄]/gu, 2) },
+    {
+      id: "absolutes",
+      label: "absolutes (always / never / literally)",
+      prior: 0.5,
+      fn: re2(/\b(?:literally|always|never|every single|all of them|nobody|everyone|only people)\b/gi, 3)
+    },
+    {
+      id: "bare",
+      label: "no facts, sources or specifics",
+      prior: 0.8,
+      fn: (c) => c.words.length <= 45 && !/\d/.test(c.text) && !/https?:\/\//.test(c.text) ? 1 : 0
+    },
+    // ---- novelty: news, specifics and reasoning pull the score down
+    {
+      id: "attribution",
+      label: "sourced reporting",
+      prior: -2,
+      fn: re2(/\b(?:according to|reported|reports?|announced|confirmed|spokes\w+|officials?|statement|ruling|court|senate|parliament|congress|bill|voted?|signed|filed|study|survey|poll|researchers?|police|authorities|briefing|usgs|union|deal|strikers?|election|minister|government|administration|museum|nominee|amendment)\b/gi, 3)
+    },
+    { id: "newsmark", label: "news framing", prior: -0.8, fn: re2(/^\s*(?:breaking|just in|update|developing)\b|🚨/gi) },
+    { id: "digits", label: "specific numbers", prior: -1.2, fn: (c) => sat2(count2(c.text, /\b\d[\d,.:%]*\b/g), 3) },
+    {
+      id: "timeanchor",
+      label: "dated to a recent event",
+      prior: -0.9,
+      fn: re2(/\b(?:today|yesterday|tonight|this (?:morning|week|afternoon)|on (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d{1,2}\s?(?:am|pm)|at \d)\b/gi, 2)
+    },
+    { id: "link", label: "link", prior: -0.8, fn: re2(/https?:\/\/\S+/g) },
+    {
+      id: "reasoning",
+      label: "argument or reasoning",
+      prior: -1.2,
+      fn: re2(/\b(?:because|however|although|which means|so that|the reason|evidence|data|for example|e\.g\.|in fact|turns out|statute|policy|mostly|margin|retention|runoff)\b/gi, 3)
+    },
+    {
+      id: "firsthand",
+      label: "first-hand experience",
+      prior: -1.3,
+      fn: (c) => sat2(c.words.filter((w) => /^(?:i|i'm|i’m|i've|i’ve|my|me|we|our|myself)$/.test(w)).length, 3)
+    },
+    {
+      id: "personal",
+      label: "personal anecdote",
+      prior: -1.3,
+      fn: re2(/\bmy (?:dad|mom|mum|wife|husband|friend|friends|uncle|aunt|grandmother|grandfather|office|team|cat|dog|boss|kid|daughter|son|district)\b|\b(?:two|a) (?:\w+ )?friends? of mine\b/gi)
+    },
+    {
+      id: "nuance",
+      label: "hedged / reasoned opinion",
+      prior: -0.9,
+      fn: re2(/\b(?:i think|honestly|i disagree|in my view|might|probably|seems|arguably|not sure|though|fine and)\b/gi, 2)
+    },
+    { id: "length", label: "length", prior: -0.5, fn: (c) => sat2(Math.log10(Math.max(c.chars, 10)) - 1.7, 0.9) }
+  ];
+  var RAGE_PRIOR = { bias: -1, w: Object.fromEntries(RAGE_FEATURES.map((f) => [f.id, f.prior])) };
+  var sigmoid3 = (z) => 1 / (1 + Math.exp(-z));
+  var rageVector = (text) => {
+    const c = makeCtx(text);
+    return RAGE_FEATURES.map((f) => f.fn(c));
+  };
+  function localRage(text, hints = {}, weights = RAGE_PRIOR) {
+    const x = rageVector(text);
+    let z = weights.bias;
+    const contrib = [];
+    let news = 0;
+    RAGE_FEATURES.forEach((f, i) => {
+      const v = (weights.w[f.id] ?? f.prior) * x[i];
+      z += v;
+      if (v > 0.5) contrib.push([f.label, v]);
+      if (f.id === "attribution") news += 0.5 * x[i];
+      if (f.id === "timeanchor") news += 0.25 * x[i];
+      if (f.id === "digits" || f.id === "newsmark") news += 0.125 * x[i];
+    });
+    if (hints.ageHours !== void 0 && hints.ageHours < 36 && news > 0.2) z -= 0.9 * Math.min(1, news);
+    const p = sigmoid3(z);
+    contrib.sort((a, b) => b[1] - a[1]);
+    return { score: Math.round(p * 100), p, hits: contrib.slice(0, 4).map((c) => c[0]), news: Math.min(1, news) };
+  }
+  function refitRage(votes, base = RAGE_PRIOR) {
+    const rows = votes.filter((v) => v.text && (v.label === "rage" || v.label === "not_rage"));
+    const ids = RAGE_FEATURES.map((f) => f.id);
+    const w0 = ids.map((id, i) => base.w[id] ?? RAGE_FEATURES[i].prior);
+    let b = base.bias;
+    const w = [...w0];
+    if (rows.length >= 4) {
+      const data = rows.map((v) => ({ x: rageVector(v.text), y: v.label === "rage" ? 1 : 0 }));
+      const clampTo = (v, c) => Math.min(c + 1.5, Math.max(c - 1.5, v));
+      for (let e = 0; e < 160; e++) {
+        const gw = new Array(w.length).fill(0);
+        let gb = 0;
+        for (const { x, y } of data) {
+          let z = b;
+          for (let i = 0; i < w.length; i++) z += w[i] * x[i];
+          const err = (sigmoid3(z) - y) * 2;
+          gb += err;
+          for (let i = 0; i < w.length; i++) gw[i] += err * x[i];
+        }
+        b = clampTo(b - 0.2 * gb / data.length, base.bias);
+        for (let i = 0; i < w.length; i++) w[i] = clampTo(w[i] - 0.2 * (gw[i] / data.length + 0.06 * (w[i] - w0[i])), w0[i]);
+      }
+    }
+    return { bias: +b.toFixed(4), w: Object.fromEntries(ids.map((id, i) => [id, +w[i].toFixed(4)])), trained: { n: rows.length, at: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) } };
+  }
+
   // src/lib/index.ts
-  var SD = { ...scoring_exports, localScore, sgdStep, DEFAULT_WEIGHTS, learn, FEATURES, providers: providers_exports, router: router_exports };
+  var SD = { ...scoring_exports, localScore, sgdStep, DEFAULT_WEIGHTS, learn, FEATURES, providers: providers_exports, router: router_exports, rage: rage_exports };
   globalThis.SD = SD;
 })();

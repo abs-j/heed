@@ -15,6 +15,9 @@ posts on X, and leaves everything else alone.
 - **Hover any post** for a small dock: score chip and votes, **Undo**. A post that looks fine shows one obvious button, **Mark slop**, so you can teach it what it missed (short posts get this too: they're scored on-device only). Click the score for the *why* popover: a gauge against your threshold plus every signal, the model score, account type and what it learned from you.
 - **Learns your taste on-device.** Your votes retrain the local classifier; Settings shows how much better it agrees with you.
 
+### Rage bait
+A second verdict, separate from slop: posts that exist only to provoke contempt or tribal anger and add nothing new ("X be like" mockery, sweeping claims about a group, rhetorical outrage questions). **News, announcements and fresh commentary that adds facts or an argument are left alone**, even when angry or political, and fresh posts with sources or numbers get extra benefit of the doubt. Folded as an orange *RAGE* row (or hidden, or off: your choice in the popup/settings). Scored on-device (`src/lib/rage.ts`) and by the AI model, which is told explicitly not to flag topics, only emptiness; your *Rage bait / Not rage bait* votes override both and retrain the on-device scorer.
+
 ### Modes
 Fold (default) · Hide · Dim · Chip (score chip on slop only) · Scores (chip on every post, no filtering).
 
@@ -22,6 +25,7 @@ Fold (default) · Hide · Dim · Chip (score chip on slop only) · Scores (chip 
 | Keys | Action |
 |---|---|
 | <kbd>Alt</kbd>+<kbd>S</kbd> / <kbd>Alt</kbd>+<kbd>N</kbd> | mark slop / not slop |
+| <kbd>Alt</kbd>+<kbd>R</kbd> | mark / unmark rage bait |
 | <kbd>Alt</kbd>+<kbd>U</kbd> | undo your vote |
 | <kbd>Alt</kbd>+<kbd>P</kbd> | peek / close a folded post |
 | <kbd>Alt</kbd>+<kbd>W</kbd>, <kbd>Esc</kbd> | open / close the *why* popover |

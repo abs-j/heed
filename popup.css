@@ -21,7 +21,8 @@ header { display:flex; align-items:center; gap:10px; }
 .tile b { font-size:20px; letter-spacing:-.02em; } .tile span { font-size:11px; color:var(--mute); }
 .spark { display:grid; gap:4px; } .spark svg { width:100%; height:36px; } .spark rect { fill:var(--slop); opacity:.85; } .spark rect.z { fill:var(--bd); opacity:1; }
 .lbl { display:flex; justify-content:space-between; align-items:baseline; font-weight:650; margin-bottom:6px; }
-.seg { display:grid; grid-template-columns:repeat(5,1fr); gap:2px; padding:2px; background:var(--surface); border-radius:10px; }
+.seg { display:grid; grid-template-columns:repeat(var(--cols,5),1fr); gap:2px; padding:2px; background:var(--surface); border-radius:10px; }
+#rage { --cols:3; }
 .seg button { font:600 12px inherit; padding:6px 0; border:0; border-radius:8px; background:transparent; color:var(--mute); cursor:pointer; }
 .seg button:hover { color:var(--fg); }
 .seg button[aria-checked="true"] { background:var(--bg); color:var(--fg); box-shadow:0 1px 3px rgba(0,0,0,.18); }

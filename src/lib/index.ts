@@ -5,7 +5,8 @@ import { FEATURES } from "./features";
 import * as scoring from "./scoring";
 import * as providers from "./providers";
 import * as router from "./router";
+import * as rage from "./rage";
 
-const SD = { ...scoring, localScore, sgdStep, DEFAULT_WEIGHTS, learn, FEATURES, providers, router };
+const SD = { ...scoring, localScore, sgdStep, DEFAULT_WEIGHTS, learn, FEATURES, providers, router, rage };
 export type SDApi = typeof SD;
 (globalThis as unknown as { SD: SDApi }).SD = SD;

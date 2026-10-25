@@ -5,7 +5,7 @@ import { mountCard } from "./ui";
   // Any post with a little text gets a card so it can be marked by hand; the background
   // only sends posts of 40+ characters to an AI model (shorter ones are scored locally).
   const MIN_CHARS = 3;
-  const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: true, acctInfluence: 100 };
+  const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: true, acctInfluence: 100, rageMode: "fold", rageThreshold: 70 };
   // Only borderline posts get the (slower) creator-profile second pass.
   const BORDER = [35, 75];
 
@@ -51,6 +51,8 @@ import { mountCard } from "./ui";
       if (name) ctx.name = name.slice(0, 80);
       ctx.verified = !!user.querySelector('[data-testid="icon-verified"]');
     }
+    const posted = a.querySelector("time")?.getAttribute("datetime");
+    if (posted) ctx.postedAt = posted;
     const statusHref = a.querySelector('a[href*="/status/"] time')?.closest("a")?.getAttribute("href") || "";
     const pid = statusHref.match(/\/status\/(\d+)/);
     if (pid) ctx.postId = pid[1];
@@ -290,6 +292,11 @@ import { mountCard } from "./ui";
     return article._sdFolded.length;
   }
 
+  // Rage bait is a second verdict. "scores only" mode never filters, and slop wins when both apply.
+  const rageActive = () => settings.rageMode !== "off" && settings.mode !== "scores";
+  const isRage = (r) => rageActive() && typeof r.rage === "number" && r.rage >= settings.rageThreshold && !r.rageFb?.startsWith?.("not");
+  const rageTitle = (r) => "Rage bait" + (r.rageReason ? `: ${r.rageReason}` : " · nothing new in this post");
+  const keepRage = (r) => ({ rage: r.rage, rageSrc: r.rageSrc, rageHits: r.rageHits, rageNews: r.rageNews, rageReason: r.rageReason, rageFb: r.rageFb });
   const isSlop = (r) => (r.fb ? r.fb === "slop" : !!r.rules?.length || r.score >= settings.sensitivity);
 
   const BORDER_BAND = 15;
@@ -316,19 +323,30 @@ import { mountCard } from "./ui";
       }
       if (settings.mode === "dim") article.setAttribute("data-sd-dim", "");
     }
+    if (!slop && isRage(r)) {
+      if (settings.rageMode === "hide") {
+        const cell = article.closest('[data-testid="cellInnerDiv"]');
+        if (cell) { cell.setAttribute("data-sd-hidden", ""); logFiltered(article, { ...r, score: r.rage, explanation: rageTitle(r) }); return; }
+      }
+      collapse(article, r, { wasCollapsed, wasOpen, fullHeight });
+      logFiltered(article, { ...r, score: r.rage, explanation: rageTitle(r) });
+      return;
+    }
     mount(article, r, { strip: false, folded: 0 });
   }
 
-  const stateOf = (r, slop) => (slop ? "slop" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok");
+  const stateOf = (r, slop) => (slop ? "slop" : isRage(r) ? "rage" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok");
 
   function mount(article, r, { strip, folded }) {
     const slop = isSlop(r);
     const state = stateOf(r, slop);
     article.dataset.sd = state;
     article._sdCard = mountCard(article, {
-      state, score: r.score, threshold: settings.sensitivity, title: r.explanation || "",
+      state, score: state === "rage" ? r.rage : r.score, threshold: state === "rage" ? settings.rageThreshold : settings.sensitivity,
+      title: state === "rage" ? rageTitle(r) : r.explanation || "",
+      rageOn: rageActive(), rageVoted: r.rageFb,
       handle: strip ? handleOf(article) : undefined,
-      signals: r.rules?.length ? r.rules : (r.why?.hits || []),
+      signals: state === "rage" ? (r.rageHits || []) : r.rules?.length ? r.rules : (r.why?.hits || []),
       details: detailsOf(r), folded, strip,
       // Scores-only mode and badge mode keep the chip on screen; otherwise it appears on hover.
       chipAlways: settings.mode === "scores" || (settings.mode === "badge" && slop),
@@ -336,6 +354,8 @@ import { mountCard } from "./ui";
     }, {
       vote: (label) => vote(article, r, label),
       undo: () => undo(article, r),
+      rage: (label) => rageVote(article, r, label),
+      rageUndo: () => rageUndo(article, r),
       peek: () => openPost(article),
       toggleWhy: (viaKeyboard) => {
         if (article.dataset.sdWhy === "1") delete article.dataset.sdWhy; else article.dataset.sdWhy = "1";
@@ -452,7 +472,7 @@ import { mountCard } from "./ui";
   async function vote(article, r, label) {
     const res = await chrome.runtime.sendMessage({ type: "feedback", key: r.key, text: r.text, label, handle: contextOf(article).handle });
     if (!res || res.error) return;
-    results.set(article, { ...res, text: r.text });
+    results.set(article, { ...res, ...keepRage(r), text: r.text });
     delete article.dataset.sdPeek;
     // Marking a post slop folds it, but keep it open until the pointer leaves so the
     // confirmation and Undo are visible.
@@ -460,6 +480,23 @@ import { mountCard } from "./ui";
     if (label === "not_slop") article.dataset.sdRevealed = "1";
     else delete article.dataset.sdRevealed;
     render(article);
+  }
+
+  async function rageVote(article, r, label) {
+    const res = await chrome.runtime.sendMessage({ type: "rageVote", key: r.key, text: r.text, label, handle: contextOf(article).handle });
+    if (!res || res.error) return;
+    results.set(article, { ...r, rage: label === "rage" ? 100 : 0, rageSrc: "you", rageFb: label });
+    delete article.dataset.sdPeek;
+    // Like marking slop: stay open until the pointer leaves so the confirmation and Undo are visible.
+    if (label === "rage" && settings.rageMode === "fold") article.setAttribute("data-sd-open", "");
+    render(article);
+  }
+
+  async function rageUndo(article, r) {
+    await chrome.runtime.sendMessage({ type: "rageUnvote", key: r.key });
+    results.delete(article);
+    clearDecor(article);
+    request(article);
   }
 
   async function undo(article, r) {
@@ -499,6 +536,11 @@ import { mountCard } from "./ui";
     if (acct) line("Account", `${ACCT[acct] || acct}${w.acctConf ? ` (${w.acctConf}% sure)` : ""}`);
     if (r.profiled) line("Second pass", "re-scored with the creator's profile");
     if (r.rules?.length) line("Your filters", r.rules.join(", "));
+    if (rageActive() && typeof r.rage === "number") {
+      const who = r.rageSrc === "you" ? "your vote" : r.rageSrc === "model" ? "the AI model" : "on-device";
+      line("Rage bait", `${r.rage}/100 (${who})` + (r.rageReason && r.rageSrc !== "you" ? `: ${r.rageReason}` : ""));
+      if (r.rageNews >= 0.3) line("Novelty", "reads like reporting (sources, numbers or dates), so it is given the benefit of the doubt");
+    }
     if (w.profile) line("Profile read", w.profile);
     else if (!r.local && !r.creator && r.tier !== "local") line("Profile", "not available; judged from the post and handle");
     if (w.reply) line("Context", "judged as a reply");
@@ -546,6 +588,7 @@ import { mountCard } from "./ui";
     if (k === "KeyS" && !r.fb) vote(article, r, "slop");
     else if (k === "KeyN" && !r.fb) vote(article, r, "not_slop");
     else if (k === "KeyU" && r.fb) undo(article, r);
+    else if (k === "KeyR" && rageActive()) { if (r.rageFb) rageUndo(article, r); else rageVote(article, r, "rage"); }
     else if (k === "KeyP") { if (article.hasAttribute("data-sd-open")) closePost(article, true); else openPost(article); }
     else if (k === "KeyW") {
       if (article.dataset.sdWhy === "1") delete article.dataset.sdWhy; else article.dataset.sdWhy = "1";
@@ -569,7 +612,9 @@ import { mountCard } from "./ui";
   addEventListener("keydown", (e) => { if (e.key === "Escape") closeWhyAndRefocus(); }, true);
 
   async function init() {
-    const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence"]);
+    const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold"]);
+    if (["fold", "hide", "off"].includes(s.rageMode)) settings.rageMode = s.rageMode;
+    if (typeof s.rageThreshold === "number") settings.rageThreshold = s.rageThreshold;
     if (s.profiles !== undefined) settings.profiles = s.profiles;
     if (typeof s.acctInfluence === "number") settings.acctInfluence = s.acctInfluence;
     if (s.enabled !== undefined) settings.enabled = s.enabled;
@@ -596,6 +641,8 @@ import { mountCard } from "./ui";
       if (ch.enabled) { settings.enabled = ch.enabled.newValue; dirty = true; }
       if (ch.mode && MODES.includes(ch.mode.newValue)) { settings.mode = ch.mode.newValue; dirty = true; }
       if (ch.sensitivity) { settings.sensitivity = ch.sensitivity.newValue; dirty = true; }
+      if (ch.rageMode && ["fold", "hide", "off"].includes(ch.rageMode.newValue)) { settings.rageMode = ch.rageMode.newValue; dirty = true; }
+      if (ch.rageThreshold) { settings.rageThreshold = Number(ch.rageThreshold.newValue) || 70; dirty = true; }
       if (ch.profiles) settings.profiles = ch.profiles.newValue;
       if (ch.acctInfluence) { settings.acctInfluence = Number(ch.acctInfluence.newValue); dirty = true; }
       if (dirty) {

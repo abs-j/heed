@@ -31,7 +31,7 @@ const SCORE_LABELS = [
 ];
 
 // Bumped when the prompt changes so old scores are re-evaluated.
-const PROMPT_VERSION = "v2:";
+const PROMPT_VERSION = "v3:";
 const AUTHORS_KEY = "sdAuthors";
 const AUTHORS_MAX = 400;
 
@@ -43,13 +43,80 @@ let model = null;
 let modelLoaded = null;
 function loadModel() {
   if (!modelLoaded) {
-    modelLoaded = chrome.storage.local.get(["sdModel", "learn"]).then((r) => {
+    modelLoaded = chrome.storage.local.get(["sdModel", "learn", "sdRageVotes", "sdRageModel"]).then((r) => {
       model = r.learn === false ? null : r.sdModel || null;
+      rageModel = r.learn === false ? null : r.sdRageModel || null;
+      rageFb = Object.fromEntries((r.sdRageVotes || []).map((v) => [v.key, v.label]));
       localMemo.clear();
     });
   }
   return modelLoaded;
 }
+// ---- Rage bait --------------------------------------------------------------
+// A second, independent verdict: does the post exist only to provoke, with nothing new in it?
+// The AI model answers it alongside slop; the on-device scorer (src/lib/rage.ts) covers
+// everything the model doesn't see, and the reader's rage votes override both.
+let rageModel = null;
+let rageFb = {};   // post key -> "rage" | "not_rage" (the reader's votes)
+const ageHours = (iso) => {
+  const t = Date.parse(iso || "");
+  return Number.isFinite(t) ? Math.max(0, (Date.now() - t) / 36e5) : undefined;
+};
+async function getRageSettings() {
+  const { rageMode, rageThreshold } = await chrome.storage.local.get(["rageMode", "rageThreshold"]);
+  return { mode: ["fold", "hide", "off"].includes(rageMode) ? rageMode : "fold", threshold: Number(rageThreshold) || 70 };
+}
+async function getRageExamples(text) {
+  const { sdRageVotes = [] } = await chrome.storage.local.get("sdRageVotes");
+  if (!sdRageVotes.length) return [];
+  const w = words(text);
+  const rel = (v) => { const vw = words(v.text); let i = 0; for (const x of vw) if (w.has(x)) i++; return i / (vw.size + w.size - i || 1); };
+  const pick = (label) => sdRageVotes.filter((v) => v.label === label).map((v, i) => ({ v, r: rel(v) + i * 1e-4 }))
+    .sort((a, b) => b.r - a.r).slice(0, 3).map((x) => ({ text: x.v.text.slice(0, 240), user_label: x.v.label }));
+  return [...pick("rage"), ...pick("not_rage")];
+}
+// Adds the final rage verdict to any analysis result, whatever tier produced it.
+function withRage(r, { text, ctx }) {
+  if (!r || typeof r !== "object" || r.error) return r;
+  const lr = SD.rage.localRage(text, { ageHours: ageHours(ctx?.postedAt) }, rageModel || undefined);
+  const fb = r.key && rageFb[r.key];
+  let rage = typeof r.rage === "number" ? r.rage : lr.score;
+  let src = typeof r.rage === "number" ? "model" : "local";
+  if (r.pattern === "creator_trusted") { rage = 0; src = "you"; }
+  if (fb) { rage = fb === "rage" ? 100 : 0; src = "you"; }
+  return {
+    ...r, rage, rageSrc: src, rageHits: lr.hits, rageNews: Math.round(lr.news * 100) / 100,
+    rageReason: r.rageReason || lr.hits.slice(0, 2).join(", "), rageFb: fb || undefined
+  };
+}
+let rageRefitTimer = null;
+function scheduleRageRefit() {
+  clearTimeout(rageRefitTimer);
+  rageRefitTimer = setTimeout(async () => {
+    const { sdRageVotes = [], learn } = await chrome.storage.local.get(["sdRageVotes", "learn"]);
+    if (learn === false || sdRageVotes.length < 4) { rageModel = null; await chrome.storage.local.remove("sdRageModel"); return; }
+    rageModel = SD.rage.refitRage(sdRageVotes);
+    await chrome.storage.local.set({ sdRageModel: rageModel });
+  }, 800);
+}
+async function rageVote({ key, text, label, handle }) {
+  if (!key || (label !== "rage" && label !== "not_rage")) return { error: "bad vote" };
+  const { sdRageVotes = [] } = await chrome.storage.local.get("sdRageVotes");
+  const votes = sdRageVotes.filter((v) => v.key !== key);
+  votes.push({ key, text: String(text).slice(0, 280), label, handle: handle || undefined, ts: Date.now() });
+  rageFb[key] = label;
+  await chrome.storage.local.set({ sdRageVotes: votes.slice(-300) });
+  scheduleRageRefit();
+  return { key, rageFb: label };
+}
+async function rageUnvote({ key }) {
+  const { sdRageVotes = [] } = await chrome.storage.local.get("sdRageVotes");
+  delete rageFb[key];
+  await chrome.storage.local.set({ sdRageVotes: sdRageVotes.filter((v) => v.key !== key) });
+  scheduleRageRefit();
+  return { key };
+}
+
 // A post is scored a few times per request (routing, hints, explanation); memoise by text.
 const localMemo = new Map();
 function local(text) {
@@ -82,6 +149,8 @@ chrome.storage.onChanged?.addListener((ch, area) => {
   if (area !== "local") return;
   if (ch.sdVotes || ch.learn) scheduleRefit();
   // A retrain done elsewhere (the settings page) takes effect here immediately.
+  if (ch.sdRageVotes || ch.learn) scheduleRageRefit();
+  if (ch.sdRageModel && !ch.sdRageVotes) rageModel = ch.sdRageModel.newValue || null;
   if (ch.sdModel && !ch.sdVotes && !ch.learn) { model = ch.sdModel.newValue || null; localMemo.clear(); }
 });
 
@@ -316,6 +385,7 @@ async function buildContext(text, ctx) {
   const author = await getAuthor(ctx?.handle);
   const prevType = (await getProfileRecord(ctx?.handle))?.type;
   const rules = await getRules();
+  const rageEx = await getRageExamples(text);
   const state = {
     platform: "X (Twitter) post",
     post: text.slice(0, 1500),
@@ -348,7 +418,9 @@ async function buildContext(text, ctx) {
     ...(votedOn ? { reader_votes_on_this_creator: votedOn } : {}),
     ...(ctx?.media?.length ? { attached_media: ctx.media } : {}),
     ...(ctx?.context ? { feed_context: ctx.context } : {}),
-    ...(examples.length ? { reader_labelled_examples: examples } : {})
+    ...(examples.length ? { reader_labelled_examples: examples } : {}),
+    ...(ctx?.postedAt ? { posted_at: ctx.postedAt, post_age_hours: Math.round((ageHours(ctx.postedAt) ?? 0) * 10) / 10 } : {}),
+    ...(rageEx.length ? { reader_rage_examples: rageEx } : {})
   };
   return { state, examples, votedOn, rules };
 }
@@ -384,6 +456,17 @@ async function callJev(text, ctx, apiKey) {
           no_match: "The post does not clearly fit this filter"
         }
       }])),
+      rage: {
+        type: "score",
+        instructions: "How much is this post RAGE BAIT? Rage bait exists only to provoke contempt, outrage or tribal reaction and adds nothing new: stereotyping or mocking a group ('X be like'), rhetorical outrage questions, deliberately inflammatory takes with no facts, sources, argument or first-hand experience. It is NOT rage bait merely because it is political, angry or controversial, or because its topic is recent. News reporting, announcements, and fresh commentary on recent events that adds facts, analysis or a reasoned argument must score low, as must personal experiences and humour that is not aimed at a group. Use post_age_hours and attached specifics when present. If reader_rage_examples are present, calibrate to the reader's taste.",
+        criteria: [
+          "0-10: Not rage bait. News, announcements, specific information, reasoned opinion, personal experience or harmless humour",
+          "11-30: Opinionated or political but adds specifics, an argument or a fresh angle",
+          "31-69: Mixed. Provocative framing with some substance, or ambiguous intent",
+          "70-89: Mostly rage bait. Sweeping claims about a group, mockery or outrage with almost no content",
+          "90-100: Pure rage bait. Exists only to provoke an emotional reaction; nothing new, specific or sourced"
+        ]
+      },
       pattern: {
         type: "choice",
         instructions: "Which pattern best describes this post and its creator's behaviour?",
@@ -417,6 +500,8 @@ async function callJev(text, ctx, apiKey) {
   const p = data.answers?.pattern;
   if (!s || typeof s.score !== "number") throw new Error("Unexpected response from Jev");
   const score = Math.round(Math.min(1, Math.max(0, s.score / (SCORE_LABELS.length - 1))) * 100);
+  const rageA = data.answers?.rage;
+  const rage = typeof rageA?.score === "number" ? Math.round(Math.min(1, Math.max(0, rageA.score / 4)) * 100) : null;
   const pattern = p?.choice in PATTERNS ? p.choice : "authentic";
   const patConf = p?.probabilities?.[pattern] ?? p?.confidence ?? 0;
   const t = data.answers?.account_type;
@@ -426,7 +511,7 @@ async function callJev(text, ctx, apiKey) {
     const a = data.answers?.[`rule_${i}`];
     return a?.choice === "match" && (a.probabilities?.match ?? 1) >= 0.6;
   });
-  return finishResult({ score, pattern, patConf, acct, acctConf, matched, cost: data.usage?.cost || 0 }, text, ctx, { examples, votedOn, rules });
+  return finishResult({ score, rage, rageReason: "", pattern, patConf, acct, acctConf, matched, cost: data.usage?.cost || 0 }, text, ctx, { examples, votedOn, rules });
 }
 
 // Turns a provider's parsed answer into the cache/UI result shape.
@@ -440,7 +525,7 @@ function finishResult(a, text, ctx, { examples, votedOn, rules }) {
     provider: a.provider
   };
   return {
-    base: a.score, pattern: a.pattern, conf: Math.round(a.patConf * 100), cost: a.cost,
+    base: a.score, rage: typeof a.rage === "number" ? a.rage : undefined, rageReason: a.rageReason || undefined, pattern: a.pattern, conf: Math.round(a.patConf * 100), cost: a.cost,
     acct: a.acct, acctConf: a.acctConf, adjOk: !!ctx?.handle, profiled: !!ctx?.profile?.raw,
     rules: a.matched, rulesSig: rules.join("|"), why
   };
@@ -462,7 +547,7 @@ async function callChat(text, ctx, cfg) {
   const data = await res.json();
   const parsed = SD.providers.parseReply(SD.providers.replyText(cfg.provider, data), rules.length);
   return finishResult({
-    score: parsed.score, pattern: parsed.pattern, patConf: parsed.patConf, acct: parsed.acct, acctConf: parsed.acctConf,
+    score: parsed.score, rage: parsed.rage, rageReason: parsed.rageReason, pattern: parsed.pattern, patConf: parsed.patConf, acct: parsed.acct, acctConf: parsed.acctConf,
     matched: parsed.matched.map((i) => rules[i]), cost: 0, provider: cfg.provider
   }, text, ctx, { examples, votedOn, rules });
 }
@@ -543,7 +628,7 @@ async function runJob({ key, text, ctx, resolve, reject }) {
     if (!providerReady(cfg)) throw Object.assign(new Error("No API key set"), { status: 401 });
     const r = cfg.provider === "jev" ? await callJev(text, ctx, cfg.apiKey) : await callChat(text, ctx, cfg);
     cache[key] = {
-      base: r.base, pattern: r.pattern, conf: r.conf, acct: r.acct, acctConf: r.acctConf, adjOk: r.adjOk,
+      base: r.base, rage: r.rage, rageReason: r.rageReason, pattern: r.pattern, conf: r.conf, acct: r.acct, acctConf: r.acctConf, adjOk: r.adjOk,
       profiled: r.profiled, rules: r.rules, rulesSig: r.rulesSig, why: r.why, ts: Date.now()
     };
     const shown = await present(cache[key], key);
@@ -604,7 +689,9 @@ async function analyzeInner({ text, ctx, refine }) {
   // Tier 0: the on-device classifier answers on its own when it is confident (or when
   // the reader chose local-only), so those posts never cost an API call.
   const tier = await getTier();
-  const rt = SD.router.route(local(text).score, { ...tier, llmReady: ready });
+  const rs = await getRageSettings();
+  const rageScore = SD.rage.localRage(text, { ageHours: ageHours(ctx?.postedAt) }, rageModel || undefined).score;
+  const rt = SD.router.route(local(text).score, { ...tier, llmReady: ready, rage: { on: rs.mode !== "off", score: rageScore } });
   if (rt.use === "local") {
     if (refine && keepHit) return present(keepHit, key);
     if (!refine) bumpStat("tier0");
@@ -632,7 +719,7 @@ function noteScore(score) {
 }
 
 async function analyze(m) {
-  const r = await analyzeInner(m);
+  const r = withRage(await analyzeInner(m), m);
   if (!m.refine) {
     bumpStat("scanned");
     if (r.local) bumpStat("local");
@@ -687,13 +774,14 @@ async function clearAll({ votes }) {
   cache = {};
   clearTimeout(saveTimer);
   const rm = ["sdCache", "sdSpend", "sdSpendDay", "sdFiltered", "sdStats", "sdRecent", AUTHORS_KEY, PROFILES_KEY];
+  if (votes) { rm.push("sdRageVotes", "sdRageModel"); rageFb = {}; rageModel = null; }
   if (votes) { rm.push("sdVotes", "sdModel"); model = null; }
   await chrome.storage.local.remove(rm);
   return {};
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  const h = { analyze, feedback, unvote, clear: clearAll, logFiltered, getProfile, saveProfile, profileFailed }[msg?.type];
+  const h = { analyze, feedback, unvote, rageVote, rageUnvote, clear: clearAll, logFiltered, getProfile, saveProfile, profileFailed }[msg?.type];
   if (!h) return false;
   h(msg).then(sendResponse, (e) => sendResponse({ error: String(e.message || e) }));
   return true;

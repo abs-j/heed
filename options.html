@@ -37,6 +37,21 @@
           <small class="mute">Lower flags more posts. Posts within 15 points below the line get an amber edge.</small>
         </label>
       </div>
+      <div class="card">
+        <h2>Rage bait</h2>
+        <p class="mute">Posts that exist only to provoke anger or contempt and add nothing new: "X be like" mockery, sweeping claims about a group, rhetorical outrage questions. News, announcements and fresh commentary that adds facts or an argument are left alone, even when they are angry or political.</p>
+        <label class="field"><span>Rage-bait posts</span>
+          <select id="rageMode">
+            <option value="fold">Fold into a one-line summary (default)</option>
+            <option value="hide">Hide completely</option>
+            <option value="off">Don't filter</option>
+          </select>
+        </label>
+        <label class="field"><span>Strictness: fold posts scoring ≥ <b id="rv" class="mono"></b></span>
+          <input type="range" id="rageThreshold" min="50" max="95" step="5">
+          <small class="mute">Lower folds more. Mark posts <b>Rage bait</b> or <b>Not rage bait</b> in the hover bar (Alt+R) to teach it what you mean.</small>
+        </label>
+      </div>
     </section>
 
     <section id="detection" data-section hidden>
