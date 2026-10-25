@@ -36,3 +36,9 @@ test("one 👎 only nudges, old reactions fade, manual choices override", () => 
   assert.ok(T.topicPrefs([], { news: "less" }, now).news.pref <= T.TOPIC_FOLD);
   assert.ok(T.topicPrefs(old, { news: "more" }, now).news.pref > 0.5);
 });
+
+test("unambiguous anchors tag a post on their own", () => {
+  assert.equal(T.topicsOf("Nick Young was FURIOUS after Trae Young instantly recognized him in disguise on Guess the Fake NBA Player")[0], "sports");
+  assert.equal(T.topicsOf("Elon bought X to train Grok At $40b, it was cheap")[0], "tech");
+  assert.equal(T.topicsOf("Spent the weekend rebuilding the deck and found rot under the boards")[0], undefined);
+});

@@ -192,15 +192,15 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
 
     // Dock
     const dock = h("div", "dock");
-    const dot = btn("dot mono", String(v.score), () => {}, `Slop score ${v.score}. Click to see why. A quality score, not proof of AI generation.`);
+    const dot = btn("dot mono", v.state === "less" ? "less" : String(v.score), () => {}, `Slop score ${v.score}. Click to see why. A quality score, not proof of AI generation.`);
     dot.addEventListener("click", (e) => act.toggleWhy(e.detail === 0));
-    dot.setAttribute("aria-label", `Slop score ${v.score} out of 100. Show why.`);
+    dot.setAttribute("aria-label", v.state === "less" ? "Why this post was folded" : `Slop score ${v.score} out of 100. Show why.`);
     dot.setAttribute("aria-haspopup", "dialog");
     dot.setAttribute("aria-expanded", String(v.whyOpen));
     dotEl = dot;
     dock.append(dot);
     if (v.reaction) {
-      const vt = h("span", "voted"); vt.append("You ", h("b", undefined, v.reaction === "like" ? "liked this" : "didn't like this"));
+      const vt = h("span", "voted"); vt.append(h("b", undefined, v.reaction === "like" ? "Liked" : "Disliked"));
       dock.append(vt, btn("act", "Undo", () => act.unreact(), "Undo (Alt+U)"));
     } else {
       const thumb = (kind: "like" | "dislike") => {

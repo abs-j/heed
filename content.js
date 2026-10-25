@@ -164,17 +164,17 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       });
       wrap.append(strip);
       const dock = h("div", "dock");
-      const dot = btn("dot mono", String(v.score), () => {
+      const dot = btn("dot mono", v.state === "less" ? "less" : String(v.score), () => {
       }, `Slop score ${v.score}. Click to see why. A quality score, not proof of AI generation.`);
       dot.addEventListener("click", (e) => act.toggleWhy(e.detail === 0));
-      dot.setAttribute("aria-label", `Slop score ${v.score} out of 100. Show why.`);
+      dot.setAttribute("aria-label", v.state === "less" ? "Why this post was folded" : `Slop score ${v.score} out of 100. Show why.`);
       dot.setAttribute("aria-haspopup", "dialog");
       dot.setAttribute("aria-expanded", String(v.whyOpen));
       dotEl = dot;
       dock.append(dot);
       if (v.reaction) {
         const vt = h("span", "voted");
-        vt.append("You ", h("b", void 0, v.reaction === "like" ? "liked this" : "didn't like this"));
+        vt.append(h("b", void 0, v.reaction === "like" ? "Liked" : "Disliked"));
         dock.append(vt, btn("act", "Undo", () => act.unreact(), "Undo (Alt+U)"));
       } else {
         const thumb = (kind) => {

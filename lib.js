@@ -787,31 +787,37 @@ ${JSON.stringify(state)}${filters}`;
     {
       id: "politics",
       label: "Politics",
+      strong: /\b(?:senate|congress|parliament|prime minister|white house|trump|biden|harris|election|republicans?|democrats?)\b/i,
       re: w("election|votes?|voted|senate|congress|parliament|president|prime minister|trump|biden|harris|democrats?|republicans?|liberals?|conservatives?|policy|tariffs?|immigration|border|campaign|governor|ballot|maga|left-wing|right-wing|labor party|government")
     },
     {
       id: "sports",
       label: "Sports",
+      strong: /\b(?:nba|nfl|mlb|nhl|premier league|world series|touchdown|playoffs?|super bowl|champions league)\b/i,
       re: w("nba|nfl|mlb|nhl|premier league|playoffs?|touchdown|quarterback|goals?|scored|lakers|celtics|bucks|heat|spurs|season|coach|draft|fixtures?|world series|final|halftime|championship|league|tournament|wembanyama")
     },
     {
       id: "crypto",
       label: "Crypto",
+      strong: /\b(?:bitcoin|btc|ethereum|crypto|memecoin|airdrops?|altcoins?)\b/i,
       re: w("bitcoin|btc|eth|ethereum|crypto|tokens?|airdrops?|presale|memecoin|solana|nfts?|defi|wallets?|altcoins?|whitelist")
     },
     {
       id: "tech",
       label: "Tech & AI",
+      strong: /\b(?:openai|anthropic|chatgpt|claude|gpt-?\d?|llms?|nvidia|grok|open source)\b/i,
       re: w("ai|llms?|gpt|openai|anthropic|claude|gemini|startups?|software|apps?|api|open source|nvidia|chips?|developers?|code|python|rust|javascript|programming|robots?|grok|model|compiler|database")
     },
     {
       id: "finance",
       label: "Markets & finance",
+      strong: /\b(?:nasdaq|s&p|stock market|earnings|ipo|inflation)\b/i,
       re: w("stocks?|markets?|fed|rates?|inflation|earnings|etf|s&p|nasdaq|ipo|invest\\w*|revenue|portfolio|bonds?|economy|gdp|recession|dollar|shares|dividend")
     },
     {
       id: "entertainment",
       label: "Entertainment",
+      strong: /\b(?:netflix|box office|oscars?|trailer|marvel|anime)\b/i,
       re: w("movies?|film|trailer|series|finale|netflix|album|songs?|tour|concert|oscars?|box office|streaming|episodes?|anime|marvel|zelda|nintendo|playstation|xbox|gameplay|season \\d")
     },
     {
@@ -822,11 +828,13 @@ ${JSON.stringify(state)}${filters}`;
     {
       id: "health",
       label: "Health",
+      strong: /\b(?:vaccines?|cancer|mental health)\b/i,
       re: w("health|doctors?|cancer|vaccines?|diet|fasting|sleep|exercise|mental health|therapy|supplements?|nutrition|gut|workout")
     },
     {
       id: "science",
       label: "Science",
+      strong: /\b(?:nasa|telescope|astronomy|quantum)\b/i,
       re: w("nasa|space|physics|climate|research|study|paper|astronomy|species|quantum|biology|researchers?|telescope|experiment")
     }
   ];
