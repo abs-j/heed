@@ -8,7 +8,7 @@ test("engagement bait and stock hooks raise the local score", () => {
   const farm = "Here's the thing nobody talks about — success isn't luck, it's discipline.\n\nLike and follow for more.\n\n1. Wake up early\n2. Stay focused\n3. Never quit";
   const r = SD.localScore(farm);
   assert.ok(r.score >= 80, `score ${r.score}`);
-  assert.ok(r.hits.includes("engagement bait"));
+  assert.ok(r.hits.some((h) => /engagement bait/.test(h)));
 });
 
 test("casual first-person posts score low locally", () => {

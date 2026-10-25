@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import "../lib.js";
 
 const SD = globalThis.SD;
+if (process.argv[2] === "--corpus") { await import("./eval-corpus.mjs"); process.exit(0); }
 const file = process.argv[2];
 if (!file) {
   console.error("usage: node tools/eval.mjs <backup.json>");

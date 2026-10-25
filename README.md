@@ -66,3 +66,8 @@ Sensitivity sets the score threshold at which a post counts as slop.
 ## Privacy
 The API key lives in `chrome.storage.local` and is only used by the background worker. Text of
 posts you view is sent to OpenRouter/TypeSafe for scoring. No other network access.
+
+## Development (v2 work in progress)
+- `lib.js` is **generated** from `src/lib/*.ts`: run `npm install && npm run build` after editing, then reload the extension.
+- Local classifier: `src/lib/features.ts` (≈40 hand-weighted features) + `src/lib/weights.json` (trained). `npm run train [backup.json]` retrains, `npm run eval` compares it with the frozen v1.5 heuristic on the seed and held-out corpora, `npm test` builds and runs everything.
+- The bundled corpora are synthetic and labelled by the author; use your own exported votes for real calibration. See REVAMP_PLAN.md.
