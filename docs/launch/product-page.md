@@ -1,7 +1,7 @@
-# Slop Detector
-### Take back your timeline.
+# [Name]  *(working title: Slop Detector)*
+### Decide what deserves your attention.
 
-X decides what you see. Slop Detector decides what *you* don't want to read, and quietly gets it out of the way.
+X decides what to show you. This decides what costs you attention. Tell it with a 👍 or 👎 what you liked and didn't, and everything you'd rather not spend attention on folds into a single quiet line. Still there if you want it, one hover away.
 
 **[Add to Chrome]([store link])** · Free · Works on x.com
 
@@ -9,16 +9,16 @@ X decides what you see. Slop Detector decides what *you* don't want to read, and
 
 ## What it does
 
-Your feed is full of posts built to farm attention, not to say anything: "Here's the thing nobody talks about…", "Like and follow for more 🧵", recycled clips with a stock caption, and posts whose only job is to make you angry.
+Your feed is full of posts that take attention without giving anything back: engagement bait, recycled clips, vague teasers, posts built to make you furious, and topics you're just tired of.
 
-Slop Detector reads each post as it scrolls past and:
+As posts scroll past, it:
 
-- **leaves good posts completely alone**,
-- **folds slop into a single quiet line** ("SLOP 92 · stock hook, engagement bait"), which you can peek at with a hover,
-- **folds rage bait the same way**: posts that exist only to make you furious and add nothing new. News, announcements and fresh, reasoned opinions are *not* touched, even when they're angry or political,
-- **learns what you personally find tedious** from the posts you mark.
+- **leaves posts you'd want alone**,
+- **folds the rest into one line**: *SLOP* (low-effort, engagement farming, vagueposting), *RAGE* (built to provoke, nothing new in it) or *LESS* (you've been seeing less of this),
+- **learns from one signal: 👍 or 👎.** No reasons to choose. Dislike two news posts and news starts folding ("You've been seeing less news"). Like a hidden one later and it comes back. Your latest reactions count most,
+- **never hides news just because it's angry.** Rage bait is about emptiness, not topic: sourced reports, announcements and reasoned, fresh opinions are left alone (unless *you* tell it you want less of a topic).
 
-> It gives each post a *quality score*. It does **not** claim to know whether a human or an AI wrote it. Nobody can do that reliably for short posts.
+> It scores how much attention a post deserves. It does **not** claim to know whether a human or an AI wrote it; nobody can do that reliably for short posts. And it doesn't change what X serves you, only what costs *you* attention.
 
 ## See it in 20 seconds
 
@@ -30,8 +30,8 @@ Slop Detector reads each post as it scrolls past and:
 | 3–7 | A slop post slides shut into a one-line row with a red edge. Caption: "Slop folds itself." |
 | 7–10 | Cursor hovers the row; it opens smoothly; cursor leaves; it closes. Caption: "Peek any time." |
 | 10–14 | A rage-bait post folds into an orange "RAGE" row. A news post right below it stays open. Caption: "Rage bait folds. News doesn't." |
-| 14–18 | Cursor over a fine-looking post; the small bar appears; click **Mark slop**; it folds. Caption: "Missed one? Teach it." |
-| 18–20 | Logo + "Free for Chrome". |
+| 14–19 | Cursor over a news post; tap 👎 twice on two news posts; a third news post folds as "You've been seeing less news". Then tap 👍 on a hidden one; news comes back. Caption: "Tell it once. Change your mind any time." |
+| 19–20 | Logo + "Free for Chrome". |
 
 ## Install
 
@@ -42,27 +42,27 @@ It works straight away with no account and no key. If you want sharper judgement
 
 ## Make it yours
 
-- **Hover any post** for a small bar: the score, **Slop** / **Rage bait** buttons, and **Undo**. Click the score for a plain-English "why".
-- **Choose what happens:** fold, hide, dim, or just show scores. Set rage bait separately: fold, hide or off.
+- **Hover any post** for a small bar: the score, 👍, 👎 and **Undo**. Click the score for a plain-English "why".
+- **Topics:** Settings shows what it learned per topic (news, politics, sports, crypto, tech & AI, finance, entertainment, culture war, health, science). Flip any to *Less* or *More* by hand.
+- **Choose what happens:** fold, hide, dim, or just show scores. Rage bait can be folded, hidden or off.
 - **Dial it in:** a slider sets how strict it is, with a live preview of how many of your recent posts it would fold.
-- **Always show / always fold** a particular account.
-- **Your own rules** in plain words, like "crypto shilling".
+- **Always show / always fold** a particular account, or write your own rules in plain words ("crypto shilling").
+- **See the benefit:** the toolbar popup shows an estimate of the reading time you didn't spend.
 
 ### Keyboard shortcuts
 Hover a post (or select it), then:
 
 | Keys | Does |
 |---|---|
-| Alt + S | Mark slop |
-| Alt + N | Not slop |
-| Alt + R | Mark / unmark rage bait |
+| Alt + L | 👍 I liked this |
+| Alt + D | 👎 I didn't like this |
 | Alt + U | Undo |
 | Alt + P | Peek / close a folded post |
 | Alt + W | Show why it was scored this way (Esc closes) |
 
 ## It learns you
 
-Every time you mark a post, Slop Detector adjusts to your taste, on your own computer. After a few dozen marks, Settings shows how much better it agrees with you.
+Every reaction adjusts it to your taste, on your own computer. After a few dozen, Settings shows how much better it agrees with you.
 
 ## Privacy, plainly
 
@@ -76,9 +76,11 @@ Every time you mark a post, Slop Detector adjusts to your taste, on your own com
 
 **Is this an AI detector?** No. It scores how low-effort or provocative a post is, not who wrote it.
 
-**Will it hide news or opinions I disagree with?** It is designed not to. Rage-bait detection looks for *emptiness*, not topic or tone. News, sourced reports and reasoned arguments score low. If it gets one wrong, press **Not rage bait** and it learns.
+**Will it hide news or opinions I disagree with?** Not on its own. Rage-bait detection looks for *emptiness*, not topic or tone, so sourced reports and reasoned arguments score low. It only folds a topic if *you* have told it you want less of it, and a 👍 on any hidden post undoes that.
 
 **Does it break when X changes its site?** Sometimes X's layout changes break things for a day or two. Updates are quick.
+
+**Does it change my X algorithm?** No. It only changes what costs you attention on your screen.
 
 **Is it affiliated with X?** No. "X" is a trademark of its owner.
 

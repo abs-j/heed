@@ -4,7 +4,7 @@
   // src/content/ui.ts
   var CSS = `
 :host { all: initial; position: absolute; inset: 0; z-index: 5; pointer-events: none; display: block;
-  --slop: var(--sd-slop, #f2545b); --rage: var(--sd-rage, #f0883e); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
+  --slop: var(--sd-slop, #f2545b); --rage: var(--sd-rage, #f0883e); --less: var(--sd-less, #8fa3c8); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
   font: 400 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", Inter, Roboto, sans-serif;
   color: var(--sd-fg, #0f1419); }
 * { box-sizing: border-box; }
@@ -27,6 +27,7 @@ button:focus-visible, .strip:focus-visible { outline: 2px solid var(--c, var(--s
 .open .strip { opacity: 0; transform: translateY(-4px); pointer-events: none; }
 .strip:hover { background: color-mix(in srgb, var(--c) 12%, var(--sd-bg, #fff)); }
 .score { flex: none; display: grid; justify-items: center; line-height: 1; min-width: 38px; }
+.score b.ico svg { width: 22px; height: 22px; }
 .score b { font-size: 22px; font-weight: 700; color: var(--c); letter-spacing: -.02em; }
 .score i { font-style: normal; font-size: 9px; letter-spacing: .14em; font-weight: 700; color: var(--c); margin-top: 3px; opacity: .85; }
 .sep { flex: none; width: 1px; align-self: stretch; margin: 12px 0; background: color-mix(in srgb, var(--c) 25%, transparent); }
@@ -57,7 +58,9 @@ button:focus-visible, .strip:focus-visible { outline: 2px solid var(--c, var(--s
 .dot:hover { background: color-mix(in srgb, var(--sd-fg, #000) 8%, transparent); }
 .act { padding: 3px 9px; border-radius: 999px; font-weight: 650; font-size: 12px; color: var(--sd-mute, #536471); }
 .act:hover { background: color-mix(in srgb, var(--sd-fg, #000) 9%, transparent); color: var(--sd-fg, #0f1419); }
-.act.lead { color: var(--sd-fg, #0f1419); } .act.s:hover { color: var(--slop); } .act.r:hover { color: var(--rage); } .act.n:hover { color: var(--ok); }
+.act.thumb { display: inline-grid; place-items: center; padding: 4px 8px; }
+.act.thumb svg { width: 15px; height: 15px; }
+.act.thumb.like:hover { color: var(--ok); } .act.thumb.dislike:hover { color: var(--slop); } .act.n:hover { color: var(--ok); }
 .voted { padding: 3px 8px 3px 10px; font-size: 12px; color: var(--sd-mute, #536471); }
 .voted b { color: var(--sd-fg, #0f1419); font-weight: 650; }
 
@@ -83,9 +86,11 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 `;
+  var THUMB_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>';
+  var THUMB_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>';
   var SVG_CHEVRON = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>';
-  var colorOf = (v) => v.state === "slop" ? "var(--slop)" : v.state === "rage" ? "var(--rage)" : v.state === "border" ? "var(--warn)" : "var(--ok)";
-  var verdict = (v) => v.state === "slop" ? "SLOP" : v.state === "rage" ? "RAGE" : v.state === "border" ? "UNSURE" : "OK";
+  var colorOf = (v) => v.state === "slop" ? "var(--slop)" : v.state === "rage" ? "var(--rage)" : v.state === "less" ? "var(--less)" : v.state === "border" ? "var(--warn)" : "var(--ok)";
+  var verdict = (v) => v.state === "slop" ? "SLOP" : v.state === "rage" ? "RAGE" : v.state === "less" ? "LESS" : v.state === "border" ? "UNSURE" : "OK";
   function h(tag, cls, text) {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -131,10 +136,15 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       const strip = h("div", "strip");
       strip.setAttribute("role", "button");
       strip.tabIndex = 0;
-      strip.setAttribute("aria-label", `Folded post, ${v.state === "rage" ? "rage bait" : "slop"} score ${v.score}. ${v.title}. Press Enter to peek.`);
+      strip.setAttribute("aria-label", `Folded post, ${v.state === "rage" ? "rage bait" : v.state === "less" ? "not for you" : "slop"} score ${v.score}. ${v.title}. Press Enter to peek.`);
       strip.setAttribute("aria-expanded", String(open));
       const score = h("div", "score mono");
-      score.append(h("b", void 0, String(v.score)), h("i", void 0, verdict(v)));
+      const big = h("b", void 0, v.state === "less" ? "" : String(v.score));
+      if (v.state === "less") {
+        big.insertAdjacentHTML("beforeend", THUMB_DOWN);
+        big.classList.add("ico");
+      }
+      score.append(big, h("i", void 0, verdict(v)));
       const info = h("div", "info");
       const sub = h("div", "sub");
       if (v.handle) sub.append(h("span", "h", "@" + v.handle));
@@ -162,34 +172,23 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       dot.setAttribute("aria-expanded", String(v.whyOpen));
       dotEl = dot;
       dock.append(dot);
-      const rageBtn = (label) => {
-        const b = btn("act r", label === "rage" ? "Rage bait" : "Not rage bait", () => act.rage(label), label === "rage" ? "Mark as rage bait (Alt+R)" : "This isn't rage bait");
-        b.setAttribute("aria-label", label === "rage" ? "Mark this post as rage bait" : "This post is not rage bait");
-        return b;
-      };
-      if (v.rageVoted && !v.voted) {
+      if (v.reaction) {
         const vt = h("span", "voted");
-        vt.append("Marked ", h("b", void 0, v.rageVoted === "rage" ? "rage bait" : "not rage bait"));
-        dock.append(vt, btn("act", "Undo", () => act.rageUndo(), "Undo (Alt+R)"));
-      } else if (v.state === "rage" && !v.voted) {
-        dock.append(rageBtn("not_rage"));
-        const vs = btn("act s", "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
-        vs.setAttribute("aria-label", "Mark this post as slop");
-        dock.append(vs);
-      } else if (v.voted) {
-        const vt = h("span", "voted");
-        vt.append("Marked ", h("b", void 0, v.voted === "slop" ? "slop" : "not slop"));
-        dock.append(vt, btn("act", "Undo", () => act.undo(), "Undo (Alt+U)"));
+        vt.append("You ", h("b", void 0, v.reaction === "like" ? "liked this" : "didn't like this"));
+        dock.append(vt, btn("act", "Undo", () => act.unreact(), "Undo (Alt+U)"));
       } else {
-        const vs = btn("act s" + (v.state === "ok" ? " lead" : ""), v.state === "ok" ? "Mark slop" : "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
-        vs.setAttribute("aria-label", "Mark this post as slop");
-        dock.append(vs);
-        if (v.rageOn) dock.append(rageBtn("rage"));
-        if (v.state !== "ok") {
-          const vn = btn("act n", "Not slop", () => act.vote("not_slop"), "Mark as not slop (Alt+N)");
-          vn.setAttribute("aria-label", "Mark this post as not slop");
-          dock.append(vn);
-        }
+        const thumb = (kind) => {
+          const b = btn(
+            "act thumb " + kind,
+            "",
+            () => act.react(kind),
+            kind === "like" ? "I liked this (Alt+L)" : "I didn't like this (Alt+D). It will count for less next time."
+          );
+          b.setAttribute("aria-label", kind === "like" ? "I liked this post" : "I didn't like this post");
+          b.insertAdjacentHTML("beforeend", kind === "like" ? THUMB_UP : THUMB_DOWN);
+          return b;
+        };
+        dock.append(thumb("like"), thumb("dislike"));
       }
       wrap.append(dock);
       const why = h("div", "why");
@@ -198,7 +197,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       why.tabIndex = -1;
       whyEl = why;
       why.append(
-        h("h4", void 0, `${v.state === "slop" ? "Slop" : v.state === "rage" ? "Rage bait" : v.state === "border" ? "Unsure" : "Looks fine"} \xB7 ${v.score}/100`),
+        h("h4", void 0, `${v.state === "slop" ? "Slop" : v.state === "rage" ? "Rage bait" : v.state === "less" ? "Not for you" : v.state === "border" ? "Unsure" : "Looks fine"} \xB7 ${v.score}/100`),
         h("p", "lead", `${v.title}. Margin: ${marginLabel(v)}.`)
       );
       const gauge = h("div", "gauge");
@@ -209,7 +208,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       gauge.append(thr, pin);
       const scale = h("div", "scale mono");
       scale.append(h("span", void 0, "0 genuine"), h("span", void 0, `line ${v.threshold}`), h("span", void 0, "100 slop"));
-      why.append(gauge, scale);
+      if (v.state !== "less") why.append(gauge, scale);
       if (v.signals.length) {
         const sg = h("div", "sigs");
         for (const s of v.signals) sg.append(h("span", "chip", s));
@@ -253,7 +252,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
   // src/content/main.js
   (() => {
     const MIN_CHARS = 3;
-    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: true, acctInfluence: 100, rageMode: "fold", rageThreshold: 70 };
+    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: true, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, tasteMode: "fold" };
     const BORDER = [35, 75];
     const health = { articles: 0, handles: 0, probes: 0, probesOk: 0, noted: "" };
     function reportHealth() {
@@ -538,17 +537,23 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     const isRage = (r) => rageActive() && typeof r.rage === "number" && r.rage >= settings.rageThreshold && !r.rageFb?.startsWith?.("not");
     const rageTitle = (r) => "Rage bait" + (r.rageReason ? `: ${r.rageReason}` : " \xB7 nothing new in this post");
     const keepRage = (r) => ({ rage: r.rage, rageSrc: r.rageSrc, rageHits: r.rageHits, rageNews: r.rageNews, rageReason: r.rageReason, rageFb: r.rageFb });
+    const tasteActive = () => settings.tasteMode !== "off" && settings.mode !== "scores";
+    const topicLess = (r) => !r.reaction && !!r.topic?.less && !r.topic.more;
+    const isLess = (r) => tasteActive() && (r.reaction === "dislike" || topicLess(r) || !r.reaction && typeof r.interest === "number" && r.interest >= 0.6);
+    const lessTitle = (r) => r.reaction === "dislike" ? "You didn't like this" : topicLess(r) ? `You've been seeing less ${r.topic.label.toLowerCase()}` : "Not for you: resembles posts you didn't like";
     const isSlop = (r) => r.fb ? r.fb === "slop" : !!r.rules?.length || r.score >= settings.sensitivity;
     const BORDER_BAND = 15;
     function render(article) {
       const r = results.get(article);
       if (!r) return;
       const wasCollapsed = article.hasAttribute("data-sd-fold");
-      const wasOpen = article.hasAttribute("data-sd-open");
+      const wasOpen = article.hasAttribute("data-sd-open") || !!article._sdKeepOpen;
+      article._sdKeepOpen = false;
       const fullHeight = article.offsetHeight;
       clearDecor(article);
       if (!settings.enabled) return;
-      const slop = isSlop(r);
+      const liked = r.reaction === "like";
+      const slop = !liked && isSlop(r);
       const revealed = article.dataset.sdRevealed === "1";
       if (slop && !revealed) {
         if (settings.mode === "blur") {
@@ -567,7 +572,21 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         }
         if (settings.mode === "dim") article.setAttribute("data-sd-dim", "");
       }
-      if (!slop && isRage(r)) {
+      if (!slop && !liked && !isRage(r) && isLess(r)) {
+        const entry = { ...r, score: Math.round(Math.abs(r.interest || 1) * 100), explanation: lessTitle(r) };
+        if (settings.rageMode === "hide") {
+          const cell = article.closest('[data-testid="cellInnerDiv"]');
+          if (cell) {
+            cell.setAttribute("data-sd-hidden", "");
+            logFiltered(article, entry);
+            return;
+          }
+        }
+        collapse(article, r, { wasCollapsed, wasOpen, fullHeight });
+        logFiltered(article, entry);
+        return;
+      }
+      if (!slop && !liked && isRage(r)) {
         if (settings.rageMode === "hide") {
           const cell = article.closest('[data-testid="cellInnerDiv"]');
           if (cell) {
@@ -582,32 +601,28 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       }
       mount(article, r, { strip: false, folded: 0 });
     }
-    const stateOf = (r, slop) => slop ? "slop" : isRage(r) ? "rage" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok";
+    const stateOf = (r, slop) => slop ? "slop" : r.reaction === "like" ? "ok" : isRage(r) ? "rage" : isLess(r) ? "less" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok";
     function mount(article, r, { strip, folded }) {
       const slop = isSlop(r);
       const state = stateOf(r, slop);
       article.dataset.sd = state;
       article._sdCard = mountCard(article, {
         state,
-        score: state === "rage" ? r.rage : r.score,
+        score: state === "rage" ? r.rage : state === "less" ? Math.round(Math.abs(r.interest || 1) * 100) : r.score,
         threshold: state === "rage" ? settings.rageThreshold : settings.sensitivity,
-        title: state === "rage" ? rageTitle(r) : r.explanation || "",
-        rageOn: rageActive(),
-        rageVoted: r.rageFb,
+        title: state === "rage" ? rageTitle(r) : state === "less" ? lessTitle(r) : r.explanation || "",
         handle: strip ? handleOf(article) : void 0,
-        signals: state === "rage" ? r.rageHits || [] : r.rules?.length ? r.rules : r.why?.hits || [],
+        signals: state === "rage" ? r.rageHits || [] : state === "less" ? [topicLess(r) ? r.topic.label : "your taste"] : r.rules?.length ? r.rules : r.why?.hits || [],
         details: detailsOf(r),
         folded,
         strip,
         // Scores-only mode and badge mode keep the chip on screen; otherwise it appears on hover.
         chipAlways: settings.mode === "scores" || settings.mode === "badge" && slop,
-        voted: r.fb,
+        reaction: r.reaction,
         whyOpen: article.dataset.sdWhy === "1"
       }, {
-        vote: (label) => vote(article, r, label),
-        undo: () => undo(article, r),
-        rage: (label) => rageVote(article, r, label),
-        rageUndo: () => rageUndo(article, r),
+        react: (label) => react(article, r, label),
+        unreact: () => unreact(article, r),
         peek: () => openPost(article),
         toggleWhy: (viaKeyboard) => {
           if (article.dataset.sdWhy === "1") delete article.dataset.sdWhy;
@@ -730,42 +745,63 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         closeT = setTimeout(() => closePost(article), 200);
       });
     }
-    async function vote(article, r, label) {
-      const res = await chrome.runtime.sendMessage({ type: "feedback", key: r.key, text: r.text, label, handle: contextOf(article).handle });
-      if (!res || res.error) return;
-      results.set(article, { ...res, ...keepRage(r), text: r.text });
+    async function react(article, r, label) {
+      const folded = [isSlop(r) && "slop", isRage(r) && "rage", isLess(r) && "less"].filter(Boolean);
+      const next = { ...r, reaction: label, interest: label === "like" ? -1 : 1 };
+      if (label === "like") {
+        if (folded.includes("slop")) next.fb = "not_slop";
+        if (folded.includes("rage")) {
+          next.rageFb = "not_rage";
+          next.rage = 0;
+        }
+      } else {
+        if (r.score >= 50 && !folded.includes("slop")) next.fb = "slop";
+        if ((r.rage || 0) >= 50 && !folded.includes("rage")) {
+          next.rageFb = "rage";
+          next.rage = 100;
+        }
+        article._sdKeepOpen = true;
+      }
       delete article.dataset.sdPeek;
-      if (label === "slop" && settings.mode === "blur") article.setAttribute("data-sd-open", "");
-      if (label === "not_slop") article.dataset.sdRevealed = "1";
-      else delete article.dataset.sdRevealed;
+      results.set(article, next);
       render(article);
+      const res = await chrome.runtime.sendMessage({
+        type: "react",
+        key: r.key,
+        text: r.text,
+        label,
+        handle: contextOf(article).handle,
+        score: r.score,
+        rage: r.rage || 0,
+        folded
+      }).catch(() => null);
+      if (!res || res.error) {
+        results.set(article, r);
+        render(article);
+        return;
+      }
+      refreshSoon();
     }
-    async function rageVote(article, r, label) {
-      const res = await chrome.runtime.sendMessage({ type: "rageVote", key: r.key, text: r.text, label, handle: contextOf(article).handle });
-      if (!res || res.error) return;
-      results.set(article, { ...r, rage: label === "rage" ? 100 : 0, rageSrc: "you", rageFb: label });
+    let refreshT = null;
+    function refreshSoon() {
+      clearTimeout(refreshT);
+      refreshT = setTimeout(async () => {
+        for (const [a, r] of [...results]) {
+          if (!a.isConnected || !r.text || a.hasAttribute("data-sd-open") || a._sdKeepOpen) continue;
+          const nr = await ask(r.text, contextOf(a), false);
+          if (nr && !nr.error && a.isConnected) accept(a, nr, r.text);
+        }
+      }, 900);
+    }
+    async function unreact(article, r) {
+      await chrome.runtime.sendMessage({ type: "unreact", key: r.key }).catch(() => {
+      });
+      delete article.dataset.sdRevealed;
       delete article.dataset.sdPeek;
-      if (label === "rage" && settings.rageMode === "fold") article.setAttribute("data-sd-open", "");
-      render(article);
-    }
-    async function rageUndo(article, r) {
-      await chrome.runtime.sendMessage({ type: "rageUnvote", key: r.key });
       results.delete(article);
       clearDecor(article);
       request(article);
-    }
-    async function undo(article, r) {
-      const res = await chrome.runtime.sendMessage({ type: "unvote", key: r.key });
-      delete article.dataset.sdRevealed;
-      delete article.dataset.sdPeek;
-      if (res?.entry) {
-        results.set(article, { ...res.entry, text: r.text });
-        render(article);
-      } else {
-        results.delete(article);
-        clearDecor(article);
-        request(article);
-      }
+      refreshSoon();
     }
     const ACCT = {
       personal_individual: "an individual voice",
@@ -778,7 +814,11 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       const rows = [];
       const line = (label, value) => rows.push([label, value]);
       const w = r.why || {};
-      if (r.fb) line("Your vote", r.fb === "slop" ? "Slop (overrides the model)" : "Not slop (overrides the model)");
+      if (r.topics?.length && tasteActive()) {
+        line("Topic", r.topics.map((t) => t[0].toUpperCase() + t.slice(1)).join(", ") + (topicLess(r) ? ": you've been seeing less of this" : ""));
+      }
+      if (r.reaction) line("Your reaction", r.reaction === "like" ? "you liked this" : "you didn't like this");
+      else if (tasteActive() && (r.interest || 0) >= 0.3) line("Your taste", `resembles posts you didn't like (${Math.round(r.interest * 100)}% match)`);
       if (r.creator) line("Source", "your rule for this creator, no AI call");
       else if (r.tier === "local") line("Source", "on-device classifier, confident enough to skip the AI model");
       else if (r.local || w.local) line("Source", "on-device classifier only, the AI model was not used");
@@ -837,13 +877,10 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       const r = article && results.get(article);
       if (!r) return;
       const k = e.code;
-      if (k === "KeyS" && !r.fb) vote(article, r, "slop");
-      else if (k === "KeyN" && !r.fb) vote(article, r, "not_slop");
-      else if (k === "KeyU" && r.fb) undo(article, r);
-      else if (k === "KeyR" && rageActive()) {
-        if (r.rageFb) rageUndo(article, r);
-        else rageVote(article, r, "rage");
-      } else if (k === "KeyP") {
+      if (k === "KeyL" && !r.reaction) react(article, r, "like");
+      else if (k === "KeyD" && !r.reaction) react(article, r, "dislike");
+      else if (k === "KeyU" && r.reaction) unreact(article, r);
+      else if (k === "KeyP") {
         if (article.hasAttribute("data-sd-open")) closePost(article, true);
         else openPost(article);
       } else if (k === "KeyW") {
@@ -871,7 +908,8 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       if (e.key === "Escape") closeWhyAndRefocus();
     }, true);
     async function init() {
-      const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold"]);
+      const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "tasteMode"]);
+      if (["fold", "off"].includes(s.tasteMode)) settings.tasteMode = s.tasteMode;
       if (["fold", "hide", "off"].includes(s.rageMode)) settings.rageMode = s.rageMode;
       if (typeof s.rageThreshold === "number") settings.rageThreshold = s.rageThreshold;
       if (s.profiles !== void 0) settings.profiles = s.profiles;
@@ -912,6 +950,10 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         }
         if (ch.rageMode && ["fold", "hide", "off"].includes(ch.rageMode.newValue)) {
           settings.rageMode = ch.rageMode.newValue;
+          dirty = true;
+        }
+        if (ch.tasteMode && ["fold", "off"].includes(ch.tasteMode.newValue)) {
+          settings.tasteMode = ch.tasteMode.newValue;
           dirty = true;
         }
         if (ch.rageThreshold) {

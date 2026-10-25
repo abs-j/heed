@@ -1,6 +1,6 @@
 # Launch kit (samples)
 
-Drafts of everything you'd publish, written to be read and edited. Facts match the code as of v2.3.0; placeholders are in `[square brackets]`.
+Drafts of everything you'd publish, written to be read and edited. Facts match the code as of v2.4.0; positioned as a personal attention filter (name still to be chosen); placeholders are in `[square brackets]`.
 
 | File | Audience | Where it goes |
 |---|---|---|

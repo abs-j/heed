@@ -1,22 +1,23 @@
-# Slop Detector
+# Slop Detector *(working title; being reframed as a personal attention filter for X)*
 
-A Chrome (Manifest V3) extension that quietly folds low-effort, formulaic and engagement-farming
-posts on X, and leaves everything else alone.
+A Chrome (Manifest V3) extension that lets **you** decide what deserves your attention on X. Tell it with a 👍 or 👎 what you liked and didn't; posts you'd rather not spend attention on, from slop and rage bait to whole topics you want less of, **fold into a one-line row**. They're still one hover away, they just cost you a glance instead of a read.
 
-> Scores are subjective **content-quality** judgements, not proof that a post was written by an AI.
-> Detectors for short social posts are unreliable at that, so this one doesn't claim to do it.
+> It doesn't change what X serves you. It changes what costs *you* attention.
+> Scores are subjective content-quality judgements, not proof that a post was written by an AI; detectors for short social posts aren't reliable at that, so this one doesn't claim to do it.
 
-<p align="center"><img src="icons/128.png" width="96" alt="Slop Detector icon: three rising bars, green, amber and red"></p>
+<p align="center"><img src="icons/128.png" width="96" alt="Icon: three rising bars, green, amber and red"></p>
 
 ## What it does
 
-- **Fine posts look untouched.** Posts near your threshold get a thin amber edge.
-- **Slop folds into a one-line receipt**: score, verdict, the main reasons and a *Peek* control. Hover (or press <kbd>Enter</kbd>) to open it; it closes again when you leave.
-- **Hover any post** for a small dock: score chip and votes, **Undo**. A post that looks fine shows one obvious button, **Mark slop**, so you can teach it what it missed (short posts get this too: they're scored on-device only). Click the score for the *why* popover: a gauge against your threshold plus every signal, the model score, account type and what it learned from you.
-- **Learns your taste on-device.** Your votes retrain the local classifier; Settings shows how much better it agrees with you.
+- **Good posts look untouched.** Posts near your threshold get a thin amber edge.
+- **One signal from you: 👍 / 👎.** Hover any post. 👎 means "I didn't like this": it folds, and the extension learns from it. 👍 on a *hidden* post means "that was fine": it unfolds and the preference changes. No reasons to pick; it works out whether the cause was slop, rage bait, or just not your thing.
+- **Folded posts are a one-line row** (verdict, main reason, *Peek*). Hover or press <kbd>Enter</kbd> to open; it closes again when you leave. Verdicts: **SLOP** (low-effort, engagement farming, vagueposting), **RAGE** (built to provoke, nothing new), **LESS** (you've been seeing less of this).
+- **Topics you want less of.** 👎 two news posts and news starts folding as "seeing less news"; 👍 a hidden one later and it comes back. Newer reactions count more. Settings → Filters shows what it learned per topic (news, politics, sports, crypto, tech & AI, finance, entertainment, culture war, health, science) and lets you override it by hand.
+- **Learns on-device.** Reactions retrain the local classifiers; Settings shows how much better it agrees with you. The popup shows an *estimated* reading time saved.
+- **Click the score** for the *why* popover: a gauge against your threshold plus every signal, the topic, and what it learned from you.
 
 ### Rage bait
-A second verdict, separate from slop: posts that exist only to provoke contempt or tribal anger and add nothing new ("X be like" mockery, sweeping claims about a group, rhetorical outrage questions). **News, announcements and fresh commentary that adds facts or an argument are left alone**, even when angry or political, and fresh posts with sources or numbers get extra benefit of the doubt. Folded as an orange *RAGE* row (or hidden, or off: your choice in the popup/settings). Scored on-device (`src/lib/rage.ts`) and by the AI model, which is told explicitly not to flag topics, only emptiness; your *Rage bait / Not rage bait* votes override both and retrain the on-device scorer.
+Posts that exist only to provoke contempt or tribal anger and add nothing new ("X be like" mockery, sweeping claims about a group, rhetorical outrage questions). **News, announcements and fresh commentary that adds facts or an argument are left alone**, even when angry or political, and fresh posts with sources or numbers get extra benefit of the doubt. Folded as an orange *RAGE* row (or hidden, or off). Scored on-device (`src/lib/rage.ts`) and by the AI model, which is told explicitly not to flag topics, only emptiness.
 
 ### Modes
 Fold (default) · Hide · Dim · Chip (score chip on slop only) · Scores (chip on every post, no filtering).
@@ -24,9 +25,8 @@ Fold (default) · Hide · Dim · Chip (score chip on slop only) · Scores (chip 
 ### Keyboard (on the post under the pointer, or the focused one)
 | Keys | Action |
 |---|---|
-| <kbd>Alt</kbd>+<kbd>S</kbd> / <kbd>Alt</kbd>+<kbd>N</kbd> | mark slop / not slop |
-| <kbd>Alt</kbd>+<kbd>R</kbd> | mark / unmark rage bait |
-| <kbd>Alt</kbd>+<kbd>U</kbd> | undo your vote |
+| <kbd>Alt</kbd>+<kbd>L</kbd> / <kbd>Alt</kbd>+<kbd>D</kbd> | 👍 liked this / 👎 didn't like this |
+| <kbd>Alt</kbd>+<kbd>U</kbd> | undo your reaction |
 | <kbd>Alt</kbd>+<kbd>P</kbd> | peek / close a folded post |
 | <kbd>Alt</kbd>+<kbd>W</kbd>, <kbd>Esc</kbd> | open / close the *why* popover |
 
@@ -53,11 +53,11 @@ Fold (default) · Hide · Dim · Chip (score chip on slop only) · Scores (chip 
 - **Tiered routing** (`src/lib/router.ts`): clear-cut posts never reach the network. Modes: *Tiered* (default), *AI for every post*, *Local only*.
 - **Providers** (`src/lib/providers.ts`): Jev via OpenRouter, Anthropic, or any OpenAI-compatible endpoint (OpenAI, OpenRouter chat, Ollama, LM Studio; no key on localhost). Custom hosts ask for permission when you save. The daily spend cap currently tracks Jev costs only.
 - **Account context**: creator display name, handle and verified badge, media, replies/quotes, up to 4 earlier posts from the same creator, and (for borderline posts only) the bio and follower text from X's own hover card, read invisibly for a moment. Results are cached per post for 30 days.
-- **Learning** (`src/lib/learn.ts`): a taste lexicon of words and phrases that recur in posts you marked slop vs kept (leave-one-out, so a vote never explains itself) plus a refit of the feature weights, pulled towards the shipped model and capped at ±1.5 per weight. Needs 6 votes to start, 10 (3+ of each kind) to measure. Settings → Insights shows cross-validated agreement. Votes are also sent to the AI model as examples.
+- **Learning from 👍 / 👎.** One reaction fans out to three learners, so you never choose a reason: (1) **topic preferences** (`src/lib/topics.ts`): posts are tagged on-device with up to two of ten broad topics; each topic's preference is a recency-weighted (45-day half-life), smoothed like/dislike balance, so one 👎 nudges (−0.4), two fold (−0.57), and later 👍s bring it back; (2) a **taste lexicon** (`interest.ts`, `learn.ts`): words and phrases that set liked posts apart from disliked ones, leave-one-out so a reaction never explains itself; (3) the **quality models**: a 👎 on a post that already scores like slop or rage bait (≥ 50) also teaches those scorers, and a 👍 on a folded post corrects the verdict that folded it. Weights are anchored to the shipped model and capped at ±1.5. Needs 6 reactions to start and 10 (3+ of each kind) to measure agreement in Settings → Insights. Reactions are also sent to the AI model as examples.
 - **Your rules** always win: per-creator *always fold / always show* (three same-way votes set one automatically), and plain-language filters ("crypto shilling") checked in the same AI request.
 
 ## Settings
-**General** (enable, mode, sensitivity) · **Detection** (engine, provider, account-type influence, creator profiles, spend cap) · **Filters & creators** · **Review & votes** (recently filtered, vote history) · **Insights** (7-day stats, threshold tuning, learning) · **Data** (export/import, reset). The popup is a dashboard: today's counts, a 7-day sparkline, mode, and sensitivity drawn over the distribution of your recent scores.
+**General** (enable, mode, sensitivity, rage bait, your 👍/👎) · **Detection** (engine, provider, account-type influence, creator profiles, spend cap) · **Filters & creators** (topics, your rules, creators) · **Review & votes** (recently filtered, vote history) · **Insights** (7-day stats, threshold tuning, learning) · **Data** (export/import, reset). The popup is a dashboard: today's counts, a 7-day sparkline, mode, and sensitivity drawn over the distribution of your recent scores.
 
 ## Development
 ```bash

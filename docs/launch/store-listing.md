@@ -4,14 +4,14 @@ Copy each block into the matching field in the Developer Dashboard.
 
 ## Store listing tab
 
-**Name** (max 75): `Slop Detector for X`
-> If you'd rather avoid the letter X in the title, use `Slop Detector: a feed filter`.
+**Name** (max 75): `[Name]: attention filter for X`  *(working title: Slop Detector for X)*
+> Pick the final name before submitting; check trademarks and that the store name is free.
 
 **Summary / short description** (max 132 characters): 
 ```
-Quietly folds low-effort slop and rage bait on X. Works on your device, learns your taste. News and fresh opinions stay.
+Decide what deserves your attention on X. 👍/👎 teaches it; slop, rage bait and topics you want less of fold into one line.
 ```
-(121 characters)
+(125 characters)
 
 **Category:** Productivity (alternative: Social & Communication)
 
@@ -19,49 +19,48 @@ Quietly folds low-effort slop and rage bait on X. Works on your device, learns y
 
 **Detailed description:**
 ```
-Slop Detector reads each post on X as you scroll and folds the ones that aren't worth your time into a single quiet line, so you stay in control of your timeline instead of the algorithm.
+Decide what deserves your attention on X. Tell it with a 👍 or 👎 what you liked and didn't, and posts you'd rather not spend attention on fold into a single quiet line, still one hover away.
 
 WHAT IT DOES
-• Folds slop: engagement bait ("like and follow for more"), stock hooks, recycled viral clips, generic reply filler, motivational filler.
-• Folds rage bait: posts that exist only to provoke anger and add nothing new. News, announcements and fresh, reasoned opinions are NOT touched, even when they are angry or political.
-• Leaves everything else completely alone.
-• Hover a folded post to peek; hover any post to see its score, mark it as slop or rage bait, or undo.
-• Click a score for a plain-English "why".
-• Learns your taste on your device from the posts you mark, and shows how much better it agrees with you over time.
+• One signal from you: 👍 or 👎 on any post. No reasons to pick; it works out whether the cause was slop, rage bait, or just not your thing.
+• Folds slop: engagement bait, stock hooks, vagueposting, recycled clips, generic reply filler.
+• Folds rage bait: posts built only to provoke anger that add nothing new. News, announcements and fresh, reasoned opinions are NOT folded for being angry or political.
+• Learns topics you want less of: 👎 a couple of news posts and news starts folding; 👍 a hidden one later and it comes back. Newer reactions count most, and Settings shows (and lets you override) what it learned.
+• Leaves everything else alone. Hover a folded post to peek; click a score for a plain-English "why".
+• Shows an estimate of the reading time you didn't spend.
 
 YOU STAY IN CONTROL
 • Fold, hide, dim or just show scores.
 • Strictness slider with a live preview.
-• Always show or always fold specific accounts.
-• Your own plain-language rules (for example "crypto shilling").
-• Keyboard shortcuts: Alt+S slop, Alt+N not slop, Alt+R rage bait, Alt+U undo, Alt+P peek, Alt+W why.
+• Always show or always fold specific accounts; plain-language rules of your own.
+• Keyboard: Alt+L 👍, Alt+D 👎, Alt+U undo, Alt+P peek, Alt+W why.
 
 PRIVATE BY DEFAULT
-Works with no account and no key. Most posts are judged on your device and never leave your browser. Optionally add your own AI key (Anthropic, OpenAI-compatible, OpenRouter or a local model such as Ollama) for sharper judgement on borderline posts; only those posts' text is sent, to the provider you chose.
+Works with no account and no key. Most posts are judged on your device and never leave your browser; what it learns from you stays in your browser too. Optionally add your own AI key (Anthropic, OpenAI-compatible, OpenRouter or a local model such as Ollama) for sharper judgement on borderline posts; only those posts' text is sent, to the provider you chose.
 
 IMPORTANT
-Scores are subjective quality judgements, not proof that a post was written by an AI. Not affiliated with X Corp.
+It doesn't change what X shows you, only what takes your attention on your screen. Scores are subjective quality judgements, not proof a post was written by an AI. Not affiliated with X Corp.
 ```
 
 **Screenshots** (1280×800, up to 5):
-1. Timeline with one folded slop row and one folded RAGE row; a news post open between them. Caption: "Slop and rage bait fold. News stays."
-2. The hover bar with **Mark slop** / **Rage bait** on a normal post. Caption: "Missed one? Teach it."
+1. Timeline with a folded SLOP row, a folded RAGE row and a LESS row ("seeing less news"); a reasoned post open between them. Caption: "Decide what deserves your attention."
+2. The hover bar with 👍 / 👎 on a normal post. Caption: "One tap teaches it."
 3. The "why" popover with the gauge. Caption: "See exactly why."
 4. The toolbar popup dashboard. Caption: "Your feed, your threshold."
-5. Settings → Insights → *Learning from your votes*. Caption: "Gets better at you."
+5. Settings → Topics with the learned preference bars. Caption: "Change your mind any time."
 
-**Small promo tile** (440×280): logo on dark, headline "Take back your timeline."
+**Small promo tile** (440×280): logo on dark, headline "Decide what deserves your attention."
 
 ## Privacy practices tab
 
 **Single purpose:**
-> Detect and visually fold low-quality ("slop") and rage-bait posts on x.com, according to the user's settings.
+> Fold posts on x.com that the user doesn't want to spend attention on (low-quality, rage bait, or topics they've chosen to see less of), according to the user's own reactions and settings.
 
 **Permission justifications**
 
 | Permission | Justification |
 |---|---|
-| `storage` | Saves the user's settings, votes, cached scores and optional API key locally in the browser. |
+| `storage` | Saves the user's settings, reactions (👍/👎), cached scores and optional API key locally in the browser. |
 | Content script on `x.com` / `twitter.com` | Reads the text of posts the user is viewing in order to score them, and draws the fold/score interface on them. |
 | Host permission `openrouter.ai`, `api.anthropic.com`, `api.openai.com` | Only if the user enters their own key: sends the text of uncertain posts to the chosen AI provider for scoring. |
 | Host permission `localhost`, `127.0.0.1` | Lets the user point the extension at a local model server (e.g. Ollama) so nothing leaves their computer. |

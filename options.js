@@ -26,7 +26,8 @@ $("provider").addEventListener("change", showProvider);
 const sv = () => ($("sv").textContent = $("sensitivity").value);
 
 async function load() {
-  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "sdStatus", "sdSpend", "dailyBudget", "profiles", "customRules", "acctInfluence", "provider", "providerModel", "providerBase", "providerKeys", "tierMode", "rageMode", "rageThreshold"]);
+  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "sdStatus", "sdSpend", "dailyBudget", "profiles", "customRules", "acctInfluence", "provider", "providerModel", "providerBase", "providerKeys", "tierMode", "rageMode", "rageThreshold", "tasteMode"]);
+  $("tasteMode").value = s.tasteMode === "off" ? "off" : "fold";
   $("rageMode").value = ["fold", "hide", "off"].includes(s.rageMode) ? s.rageMode : "fold";
   $("rageThreshold").value = s.rageThreshold ?? 70;
   $("rv").textContent = $("rageThreshold").value;
@@ -69,7 +70,7 @@ $("save").addEventListener("click", async () => {
   await chrome.storage.local.set({
     provider: prov, providerModel: prov === "jev" ? "" : state.models[prov], providerBase: prov === "jev" ? "" : state.bases[prov],
     providerKeys: state.keys, tierMode: $("tierMode").value,
-    rageMode: $("rageMode").value, rageThreshold: Number($("rageThreshold").value),
+    rageMode: $("rageMode").value, rageThreshold: Number($("rageThreshold").value), tasteMode: $("tasteMode").value,
     enabled: $("enabled").checked,
     mode: $("mode").value,
     sensitivity: Number($("sensitivity").value),
@@ -309,11 +310,12 @@ async function renderStats() {
 
 // ---- Export / import ----
 $("export").addEventListener("click", async () => {
-  const s = await chrome.storage.local.get(["sdVotes", "sdCreators", "customRules", "mode", "sensitivity", "dailyBudget", "profiles", "acctInfluence"]);
+  const s = await chrome.storage.local.get(["sdVotes", "sdCreators", "customRules", "mode", "sensitivity", "dailyBudget", "profiles", "acctInfluence", "sdTaste", "sdRageVotes", "topicManual", "rageMode", "rageThreshold", "tasteMode"]);
   const payload = {
     app: "slop-detector", version: 1, exported: new Date().toISOString(),
-    votes: s.sdVotes || [], creators: s.sdCreators || {}, customRules: s.customRules || [],
-    settings: { mode: s.mode, sensitivity: s.sensitivity, dailyBudget: s.dailyBudget, profiles: s.profiles, acctInfluence: s.acctInfluence }
+    votes: s.sdVotes || [], reactions: s.sdTaste || [], rageVotes: s.sdRageVotes || [], topicManual: s.topicManual || {},
+    creators: s.sdCreators || {}, customRules: s.customRules || [],
+    settings: { mode: s.mode, sensitivity: s.sensitivity, dailyBudget: s.dailyBudget, profiles: s.profiles, acctInfluence: s.acctInfluence, rageMode: s.rageMode, rageThreshold: s.rageThreshold, tasteMode: s.tasteMode }
   };
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
@@ -345,6 +347,16 @@ $("importFile").addEventListener("change", async (ev) => {
       sdVotes: [...byKey.values()].sort((a, b) => a.ts - b.ts).slice(-500),
       sdCreators: creators
     };
+    const keyed = (arr, ok) => { const m = new Map(); for (const v of Array.isArray(arr) ? arr : []) if (v && typeof v.key === "string" && typeof v.text === "string" && ok(v.label)) m.set(v.key, { key: v.key, text: v.text.slice(0, 280), label: v.label, handle: v.handle, ts: v.ts || Date.now() }); return m; };
+    if (Array.isArray(d.reactions)) {
+      const cur2 = await chrome.storage.local.get(["sdTaste", "sdRageVotes"]);
+      const merge = (old, add) => { const m = new Map((old || []).map((v) => [v.key, v])); for (const [k, v] of add) m.set(k, v); return [...m.values()].sort((a, b) => a.ts - b.ts); };
+      set.sdTaste = merge(cur2.sdTaste, keyed(d.reactions, (l) => l === "less" || l === "more")).slice(-400);
+      set.sdRageVotes = merge(cur2.sdRageVotes, keyed(d.rageVotes, (l) => l === "rage" || l === "not_rage")).slice(-300);
+    }
+    if (d.topicManual && typeof d.topicManual === "object") {
+      set.topicManual = Object.fromEntries(Object.entries(d.topicManual).filter(([k, v]) => SD.topics.TOPICS.some((t) => t.id === k) && (v === "less" || v === "more")));
+    }
     if (Array.isArray(d.customRules)) set.customRules = d.customRules.map(String).slice(0, 5);
     const st = d.settings || {};
     if (["blur", "hide", "dim", "badge", "scores"].includes(st.mode)) set.mode = st.mode;
@@ -426,3 +438,49 @@ $("retrain").addEventListener("click", async () => {
 });
 renderLearning();
 chrome.storage.onChanged.addListener((ch) => { if (ch.sdVotes || ch.sdModel || ch.learn) renderLearning(); });
+
+// ---- Topics ----
+async function renderTopics() {
+  const { sdTaste = [], topicManual = {} } = await chrome.storage.local.get(["sdTaste", "topicManual"]);
+  const prefs = SD.topics.topicPrefs(sdTaste, topicManual);
+  const list = $("topicList");
+  list.textContent = "";
+  for (const t of SD.topics.TOPICS) {
+    const p = prefs[t.id];
+    const li = document.createElement("li");
+    const nm = document.createElement("div");
+    nm.className = "nm";
+    nm.textContent = t.label;
+    const small = document.createElement("small");
+    small.className = "mute";
+    small.textContent = p.manual ? `set by you` : p.likes + p.dislikes > 0 ? `${p.likes} 👍 · ${p.dislikes} 👎` : "no reactions yet";
+    nm.append(small);
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    bar.setAttribute("role", "img");
+    bar.setAttribute("aria-label", `${t.label} preference ${p.pref > 0.15 ? "more" : p.pref < -0.15 ? "less" : "neutral"}`);
+    const mark = document.createElement("i");
+    mark.style.left = `${50 + p.pref * 50}%`;
+    bar.append(mark);
+    const seg = document.createElement("div");
+    seg.className = "seg3";
+    seg.setAttribute("role", "group");
+    seg.setAttribute("aria-label", `${t.label}: set preference`);
+    for (const [val, label] of [["less", "Less"], ["", "Auto"], ["more", "More"]]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.setAttribute("aria-pressed", String((p.manual || "") === val));
+      b.onclick = async () => {
+        const next = { ...topicManual };
+        if (val) next[t.id] = val; else delete next[t.id];
+        await chrome.storage.local.set({ topicManual: next });
+      };
+      seg.append(b);
+    }
+    li.append(nm, bar, seg);
+    list.append(li);
+  }
+}
+renderTopics();
+chrome.storage.onChanged.addListener((ch) => { if (ch.sdTaste || ch.topicManual) renderTopics(); });

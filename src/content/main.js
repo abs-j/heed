@@ -5,7 +5,7 @@ import { mountCard } from "./ui";
   // Any post with a little text gets a card so it can be marked by hand; the background
   // only sends posts of 40+ characters to an AI model (shorter ones are scored locally).
   const MIN_CHARS = 3;
-  const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: true, acctInfluence: 100, rageMode: "fold", rageThreshold: 70 };
+  const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: true, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, tasteMode: "fold" };
   // Only borderline posts get the (slower) creator-profile second pass.
   const BORDER = [35, 75];
 
@@ -297,6 +297,12 @@ import { mountCard } from "./ui";
   const isRage = (r) => rageActive() && typeof r.rage === "number" && r.rage >= settings.rageThreshold && !r.rageFb?.startsWith?.("not");
   const rageTitle = (r) => "Rage bait" + (r.rageReason ? `: ${r.rageReason}` : " · nothing new in this post");
   const keepRage = (r) => ({ rage: r.rage, rageSrc: r.rageSrc, rageHits: r.rageHits, rageNews: r.rageNews, rageReason: r.rageReason, rageFb: r.rageFb });
+  // "Not for you": posts you 👎, and posts that closely resemble ones you did. A 👍 exempts a post from everything.
+  const tasteActive = () => settings.tasteMode !== "off" && settings.mode !== "scores";
+  const topicLess = (r) => !r.reaction && !!r.topic?.less && !r.topic.more;
+  const isLess = (r) => tasteActive() && (r.reaction === "dislike" || topicLess(r) || (!r.reaction && typeof r.interest === "number" && r.interest >= 0.6));
+  const lessTitle = (r) => r.reaction === "dislike" ? "You didn't like this"
+    : topicLess(r) ? `You've been seeing less ${r.topic.label.toLowerCase()}` : "Not for you: resembles posts you didn't like";
   const isSlop = (r) => (r.fb ? r.fb === "slop" : !!r.rules?.length || r.score >= settings.sensitivity);
 
   const BORDER_BAND = 15;
@@ -304,11 +310,13 @@ import { mountCard } from "./ui";
     const r = results.get(article);
     if (!r) return;
     const wasCollapsed = article.hasAttribute("data-sd-fold");
-    const wasOpen = article.hasAttribute("data-sd-open");
+    const wasOpen = article.hasAttribute("data-sd-open") || !!article._sdKeepOpen;
+    article._sdKeepOpen = false;
     const fullHeight = article.offsetHeight;
     clearDecor(article);
     if (!settings.enabled) return;
-    const slop = isSlop(r);
+    const liked = r.reaction === "like";
+    const slop = !liked && isSlop(r);
     const revealed = article.dataset.sdRevealed === "1";
 
     if (slop && !revealed) {
@@ -323,7 +331,17 @@ import { mountCard } from "./ui";
       }
       if (settings.mode === "dim") article.setAttribute("data-sd-dim", "");
     }
-    if (!slop && isRage(r)) {
+    if (!slop && !liked && !isRage(r) && isLess(r)) {
+      const entry = { ...r, score: Math.round(Math.abs(r.interest || 1) * 100), explanation: lessTitle(r) };
+      if (settings.rageMode === "hide") {
+        const cell = article.closest('[data-testid="cellInnerDiv"]');
+        if (cell) { cell.setAttribute("data-sd-hidden", ""); logFiltered(article, entry); return; }
+      }
+      collapse(article, r, { wasCollapsed, wasOpen, fullHeight });
+      logFiltered(article, entry);
+      return;
+    }
+    if (!slop && !liked && isRage(r)) {
       if (settings.rageMode === "hide") {
         const cell = article.closest('[data-testid="cellInnerDiv"]');
         if (cell) { cell.setAttribute("data-sd-hidden", ""); logFiltered(article, { ...r, score: r.rage, explanation: rageTitle(r) }); return; }
@@ -335,27 +353,25 @@ import { mountCard } from "./ui";
     mount(article, r, { strip: false, folded: 0 });
   }
 
-  const stateOf = (r, slop) => (slop ? "slop" : isRage(r) ? "rage" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok");
+  const stateOf = (r, slop) => (slop ? "slop" : r.reaction === "like" ? "ok" : isRage(r) ? "rage" : isLess(r) ? "less" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok");
 
   function mount(article, r, { strip, folded }) {
     const slop = isSlop(r);
     const state = stateOf(r, slop);
     article.dataset.sd = state;
     article._sdCard = mountCard(article, {
-      state, score: state === "rage" ? r.rage : r.score, threshold: state === "rage" ? settings.rageThreshold : settings.sensitivity,
-      title: state === "rage" ? rageTitle(r) : r.explanation || "",
-      rageOn: rageActive(), rageVoted: r.rageFb,
+      state, score: state === "rage" ? r.rage : state === "less" ? Math.round(Math.abs(r.interest || 1) * 100) : r.score,
+      threshold: state === "rage" ? settings.rageThreshold : settings.sensitivity,
+      title: state === "rage" ? rageTitle(r) : state === "less" ? lessTitle(r) : r.explanation || "",
       handle: strip ? handleOf(article) : undefined,
-      signals: state === "rage" ? (r.rageHits || []) : r.rules?.length ? r.rules : (r.why?.hits || []),
+      signals: state === "rage" ? (r.rageHits || []) : state === "less" ? [topicLess(r) ? r.topic.label : "your taste"] : r.rules?.length ? r.rules : (r.why?.hits || []),
       details: detailsOf(r), folded, strip,
       // Scores-only mode and badge mode keep the chip on screen; otherwise it appears on hover.
       chipAlways: settings.mode === "scores" || (settings.mode === "badge" && slop),
-      voted: r.fb, whyOpen: article.dataset.sdWhy === "1"
+      reaction: r.reaction, whyOpen: article.dataset.sdWhy === "1"
     }, {
-      vote: (label) => vote(article, r, label),
-      undo: () => undo(article, r),
-      rage: (label) => rageVote(article, r, label),
-      rageUndo: () => rageUndo(article, r),
+      react: (label) => react(article, r, label),
+      unreact: () => unreact(article, r),
       peek: () => openPost(article),
       toggleWhy: (viaKeyboard) => {
         if (article.dataset.sdWhy === "1") delete article.dataset.sdWhy; else article.dataset.sdWhy = "1";
@@ -469,48 +485,54 @@ import { mountCard } from "./ui";
     });
   }
 
-  async function vote(article, r, label) {
-    const res = await chrome.runtime.sendMessage({ type: "feedback", key: r.key, text: r.text, label, handle: contextOf(article).handle });
-    if (!res || res.error) return;
-    results.set(article, { ...res, ...keepRage(r), text: r.text });
+  // The reader's own thumb. Applied optimistically (the post re-renders at once); the background
+  // records it, teaches the slop / rage models when the post is (or looks like) one, and
+  // reverts here if that fails.
+  async function react(article, r, label) {
+    const folded = [isSlop(r) && "slop", isRage(r) && "rage", isLess(r) && "less"].filter(Boolean);
+    const next = { ...r, reaction: label, interest: label === "like" ? -1 : 1 };
+    if (label === "like") {
+      if (folded.includes("slop")) next.fb = "not_slop";
+      if (folded.includes("rage")) { next.rageFb = "not_rage"; next.rage = 0; }
+    } else {
+      if (r.score >= 50 && !folded.includes("slop")) next.fb = "slop";
+      if ((r.rage || 0) >= 50 && !folded.includes("rage")) { next.rageFb = "rage"; next.rage = 100; }
+      // Stay open until the pointer leaves, so the confirmation and Undo are visible.
+      article._sdKeepOpen = true;
+    }
     delete article.dataset.sdPeek;
-    // Marking a post slop folds it, but keep it open until the pointer leaves so the
-    // confirmation and Undo are visible.
-    if (label === "slop" && settings.mode === "blur") article.setAttribute("data-sd-open", "");
-    if (label === "not_slop") article.dataset.sdRevealed = "1";
-    else delete article.dataset.sdRevealed;
+    results.set(article, next);
     render(article);
+    const res = await chrome.runtime.sendMessage({
+      type: "react", key: r.key, text: r.text, label, handle: contextOf(article).handle,
+      score: r.score, rage: r.rage || 0, folded
+    }).catch(() => null);
+    if (!res || res.error) { results.set(article, r); render(article); return; }
+    refreshSoon();
   }
 
-  async function rageVote(article, r, label) {
-    const res = await chrome.runtime.sendMessage({ type: "rageVote", key: r.key, text: r.text, label, handle: contextOf(article).handle });
-    if (!res || res.error) return;
-    results.set(article, { ...r, rage: label === "rage" ? 100 : 0, rageSrc: "you", rageFb: label });
-    delete article.dataset.sdPeek;
-    // Like marking slop: stay open until the pointer leaves so the confirmation and Undo are visible.
-    if (label === "rage" && settings.rageMode === "fold") article.setAttribute("data-sd-open", "");
-    render(article);
+  // A reaction changes topic and taste preferences, so the rest of the feed is re-judged live:
+  // a 👍 on a hidden post can bring its whole topic back, a 👎 can fold more of it.
+  let refreshT = null;
+  function refreshSoon() {
+    clearTimeout(refreshT);
+    refreshT = setTimeout(async () => {
+      for (const [a, r] of [...results]) {
+        if (!a.isConnected || !r.text || a.hasAttribute("data-sd-open") || a._sdKeepOpen) continue;
+        const nr = await ask(r.text, contextOf(a), false);
+        if (nr && !nr.error && a.isConnected) accept(a, nr, r.text);
+      }
+    }, 900);
   }
 
-  async function rageUndo(article, r) {
-    await chrome.runtime.sendMessage({ type: "rageUnvote", key: r.key });
+  async function unreact(article, r) {
+    await chrome.runtime.sendMessage({ type: "unreact", key: r.key }).catch(() => {});
+    delete article.dataset.sdRevealed;
+    delete article.dataset.sdPeek;
     results.delete(article);
     clearDecor(article);
     request(article);
-  }
-
-  async function undo(article, r) {
-    const res = await chrome.runtime.sendMessage({ type: "unvote", key: r.key });
-    delete article.dataset.sdRevealed;
-    delete article.dataset.sdPeek;
-    if (res?.entry) {
-      results.set(article, { ...res.entry, text: r.text });
-      render(article);
-    } else {
-      results.delete(article);
-      clearDecor(article);
-      request(article);
-    }
+    refreshSoon();
   }
 
   const ACCT = {
@@ -524,7 +546,11 @@ import { mountCard } from "./ui";
     const rows = [];
     const line = (label, value) => rows.push([label, value]);
     const w = r.why || {};
-    if (r.fb) line("Your vote", r.fb === "slop" ? "Slop (overrides the model)" : "Not slop (overrides the model)");
+    if (r.topics?.length && tasteActive()) {
+      line("Topic", r.topics.map((t) => t[0].toUpperCase() + t.slice(1)).join(", ") + (topicLess(r) ? ": you've been seeing less of this" : ""));
+    }
+    if (r.reaction) line("Your reaction", r.reaction === "like" ? "you liked this" : "you didn't like this");
+    else if (tasteActive() && (r.interest || 0) >= 0.3) line("Your taste", `resembles posts you didn't like (${Math.round(r.interest * 100)}% match)`);
     if (r.creator) line("Source", "your rule for this creator, no AI call");
     else if (r.tier === "local") line("Source", "on-device classifier, confident enough to skip the AI model");
     else if (r.local || w.local) line("Source", "on-device classifier only, the AI model was not used");
@@ -573,7 +599,7 @@ import { mountCard } from "./ui";
     root.style.setProperty("--sd-fg", cs.color);
   }
 
-  // Alt+S slop, Alt+N not slop, Alt+U undo, Alt+P peek, Alt+W why. Alt-chords because X
+  // Alt+L liked, Alt+D didn't like, Alt+U undo, Alt+P peek, Alt+W why. Alt-chords because X
   // already owns the bare letter keys. Acts on the post under the pointer or with focus.
   let hovered = null;
   addEventListener("pointerover", (e) => { hovered = e.target.closest?.('article[data-testid="tweet"]') || null; }, { passive: true, capture: true });
@@ -585,10 +611,9 @@ import { mountCard } from "./ui";
     const r = article && results.get(article);
     if (!r) return;
     const k = e.code;
-    if (k === "KeyS" && !r.fb) vote(article, r, "slop");
-    else if (k === "KeyN" && !r.fb) vote(article, r, "not_slop");
-    else if (k === "KeyU" && r.fb) undo(article, r);
-    else if (k === "KeyR" && rageActive()) { if (r.rageFb) rageUndo(article, r); else rageVote(article, r, "rage"); }
+    if (k === "KeyL" && !r.reaction) react(article, r, "like");
+    else if (k === "KeyD" && !r.reaction) react(article, r, "dislike");
+    else if (k === "KeyU" && r.reaction) unreact(article, r);
     else if (k === "KeyP") { if (article.hasAttribute("data-sd-open")) closePost(article, true); else openPost(article); }
     else if (k === "KeyW") {
       if (article.dataset.sdWhy === "1") delete article.dataset.sdWhy; else article.dataset.sdWhy = "1";
@@ -612,7 +637,8 @@ import { mountCard } from "./ui";
   addEventListener("keydown", (e) => { if (e.key === "Escape") closeWhyAndRefocus(); }, true);
 
   async function init() {
-    const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold"]);
+    const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "tasteMode"]);
+    if (["fold", "off"].includes(s.tasteMode)) settings.tasteMode = s.tasteMode;
     if (["fold", "hide", "off"].includes(s.rageMode)) settings.rageMode = s.rageMode;
     if (typeof s.rageThreshold === "number") settings.rageThreshold = s.rageThreshold;
     if (s.profiles !== undefined) settings.profiles = s.profiles;
@@ -642,6 +668,7 @@ import { mountCard } from "./ui";
       if (ch.mode && MODES.includes(ch.mode.newValue)) { settings.mode = ch.mode.newValue; dirty = true; }
       if (ch.sensitivity) { settings.sensitivity = ch.sensitivity.newValue; dirty = true; }
       if (ch.rageMode && ["fold", "hide", "off"].includes(ch.rageMode.newValue)) { settings.rageMode = ch.rageMode.newValue; dirty = true; }
+      if (ch.tasteMode && ["fold", "off"].includes(ch.tasteMode.newValue)) { settings.tasteMode = ch.tasteMode.newValue; dirty = true; }
       if (ch.rageThreshold) { settings.rageThreshold = Number(ch.rageThreshold.newValue) || 70; dirty = true; }
       if (ch.profiles) settings.profiles = ch.profiles.newValue;
       if (ch.acctInfluence) { settings.acctInfluence = Number(ch.acctInfluence.newValue); dirty = true; }

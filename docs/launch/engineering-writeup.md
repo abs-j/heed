@@ -1,6 +1,6 @@
 # Building a feed filter that doesn't pretend to detect AI
 
-*A Chrome extension that folds low-effort "slop" and rage bait on X: on-device scoring first, an optional LLM for the hard cases, and a model that learns from your votes. Notes on the design, how I measured it, and what broke.*
+*A Chrome extension that lets you decide what deserves your attention on X: a 👍/👎 that teaches an on-device model, an optional LLM for the hard cases, and posts you'd rather skip folded into one line. Notes on the design, how I measured it, and what broke.*
 
 Repo: [github.com/abs-j/slop-detector]([repo link]) · Try it: [Chrome Web Store]([store link])
 
@@ -8,7 +8,7 @@ Repo: [github.com/abs-j/slop-detector]([repo link]) · Try it: [Chrome Web Store
 
 ## 1. The problem
 
-My timeline had filled with posts that aren't *wrong*, just empty: "Here's the thing nobody talks about…", engagement bait, recycled clips with a stock caption, and posts whose only purpose is to make me angry. The platform's own controls (mute words, "not interested") are blunt and slow. I wanted a filter that I control, that explains itself, and that gets better at *my* taste.
+My timeline had filled with posts that aren't *wrong*, just a poor use of attention: "Here's the thing nobody talks about…", engagement bait, recycled clips with a stock caption, and posts whose only purpose is to make me angry. The platform's own controls (mute words, "not interested") are blunt and slow. I wanted a filter that I control, that explains itself, and that gets better at *my* taste.
 
 ## 2. Why this is not an "AI detector"
 
@@ -61,14 +61,20 @@ Rage bait is a second, independent score. The hard requirement: **don't block ne
 - **Freshness:** when the post's age is under 36 hours *and* it reads like reporting, it gets extra benefit of the doubt.
 - The LLM prompt says it explicitly: a post is **not** rage bait because it is political, angry, controversial or about a recent event; judge whether it contributes anything.
 
-## 5. Learning from votes
+## 5. One signal: 👍 / 👎
 
-Every Slop / Not slop / Rage bait vote improves the model **on-device**:
+The first version had separate buttons: *Slop*, *Not slop*, *Rage bait*. It was accurate and tiresome. The better model of the user is that they only know whether they liked a post, not *why* it was bad. So there is one signal, and the system works out the cause:
 
-1. **A taste lexicon.** Unigrams and bigrams that recur in posts you marked slop vs. kept, as smoothed log-odds. Crucially it's **leave-one-out**: when training, a vote's own words are subtracted from the counts, otherwise every vote would "explain itself". A token needs support from at least two votes.
-2. **A weight refit,** anchored to the shipped weights and clamped to ±1.5 per weight. A handful of votes can move the model; they can't wreck it. Votes count double.
+- **👎 on a post that already scores like slop or rage bait (≥ 50)** also teaches that scorer. A 👎 on a post with neither signal is a pure preference.
+- **👍 on a folded post** is a correction: it teaches the scorer that folded it that it was wrong.
+- **Topic preferences.** Posts are tagged on-device with up to two of ten broad topics (news, politics, sports, crypto, tech & AI, finance, entertainment, culture war, health, science) by keyword lexicons that need two distinct hits (or one in a very short post, or a strong marker like "BREAKING"). Each topic's preference is a **recency-weighted, smoothed balance** of 👍 and 👎: weights halve every 45 days, and the smoothing means one 👎 only nudges (−0.4) while two fold the topic (−0.57). A 👍 on a hidden post later moves it back. The post is then folded as "seeing less news". Settings shows the learned values and lets you override them.
+- **A taste lexicon.** Unigrams and bigrams that set liked posts apart from disliked ones, as smoothed log-odds. It's **leave-one-out**: a reaction's own words are subtracted when training, otherwise every vote would "explain itself". A token needs support from at least two reactions, and the lexicon is only used once both sides have two or more.
+- **Quality model refit,** anchored to the shipped weights and clamped to ±1.5 per weight, with votes counting double.
+- **The feed updates live.** After a reaction, other posts already on screen are re-judged (their analysis is cached), so a 👍 can bring a whole topic back without a refresh.
 
-The AI model also sees your most similar votes as examples. Retraining runs in the service worker a moment after any change (≈ ms for hundreds of votes). In Settings, **cross-validated** agreement (shipped vs. learned, on posts the model hasn't trained on) shows whether it's actually helping.
+Precedence is deliberate: the reader's own 👍 exempts a post from everything; slop and rage verdicts outrank topic folding; a topic can only fold a post as "seeing less …". So a topic preference never silently overrides a verdict the reader gave.
+
+The AI model also sees the reader's most similar reactions as examples. Retraining runs in the service worker a moment after any change. In Settings, **cross-validated** agreement (shipped vs. learned, on posts the model hasn't trained on) shows whether it's actually helping.
 
 ## 6. How I evaluated it, and the limits
 
@@ -111,13 +117,15 @@ Fix: keep all page-level state in **`data-sd-*` attributes**, which React doesn'
 
 ## 10. Testing
 
-36 automated tests: classifier and rage-scorer ranking gates on held-out data, leave-one-out and bounded-weight learning properties, provider request/response parsing, router decisions, and the **service worker itself** running in a Node `vm` sandbox with a fake `chrome.*` and `fetch` (tier routing, caching, rage-vote overrides, provider fallbacks). A local harness page runs the real content script against a fake timeline, and I verified behaviour by hand on live x.com.
+42 automated tests: classifier and rage-scorer ranking gates on held-out data, leave-one-out and bounded-weight learning properties, provider request/response parsing, router decisions, and the **service worker itself** running in a Node `vm` sandbox with a fake `chrome.*` and `fetch` (tier routing, caching, rage-vote overrides, provider fallbacks). A local harness page runs the real content script against a fake timeline, and I verified behaviour by hand on live x.com.
 
 ## 11. What I'd do differently / what's next
 
 - **Collect real labels first.** Everything above is measured on synthetic data; a week of real votes would have been a better foundation than my own corpora.
 - **Spend tracking** only covers one provider; the others report cost 0.
-- **From filter to "feed corrector".** The same machinery that folds what you don't want can *boost* what you do: positive votes ("more like this"), topic interests, and a digest of the best of what scrolled past. X's virtualised timeline makes reordering fragile, so the realistic version highlights and summarises rather than reshuffles. This is a design sketch, not shipped.
+- **It doesn't change X's algorithm, and I say so.** It changes what costs *you* attention. Fold decisions aren't signals X receives (though X may still observe how you scroll). The honest metric is estimated reading time avoided (words at ~238 wpm plus ~2 s per folded post), labelled as an estimate.
+- **Topics are keyword-based.** That's fast and explainable but crude: "model" is both ML and a fashion model. The next step is letting the LLM return topic tags for the uncertain posts and learning keyword weights from reactions.
+- **A positive side.** "Boost what I like" (highlighting, a digest of what scrolled past) is a natural extension, but X's virtualised timeline makes reordering fragile, so I'd highlight and summarise, not reshuffle.
 
 ---
 

@@ -43,7 +43,10 @@ let model = null;
 let modelLoaded = null;
 function loadModel() {
   if (!modelLoaded) {
-    modelLoaded = chrome.storage.local.get(["sdModel", "learn", "sdRageVotes", "sdRageModel"]).then((r) => {
+    modelLoaded = chrome.storage.local.get(["sdModel", "learn", "sdRageVotes", "sdRageModel", "sdTaste", "sdVotes", "tasteMode", "topicManual"]).then((r) => {
+      tasteOn = r.tasteMode !== "off";
+      topicManual = r.topicManual || {};
+      rebuildInterest(r.sdTaste || [], r.sdVotes || []);
       model = r.learn === false ? null : r.sdModel || null;
       rageModel = r.learn === false ? null : r.sdRageModel || null;
       rageFb = Object.fromEntries((r.sdRageVotes || []).map((v) => [v.key, v.label]));
@@ -56,6 +59,57 @@ function loadModel() {
 // A second, independent verdict: does the post exist only to provoke, with nothing new in it?
 // The AI model answers it alongside slop; the on-device scorer (src/lib/rage.ts) covers
 // everything the model doesn't see, and the reader's rage votes override both.
+// ---- Preferences: the reader's 👍 / 👎 ------------------------------------------
+// One signal, no reasons asked. A 👎 is a preference ("less of this"); when the post also looks
+// like slop or rage bait it teaches those verdicts too, and a 👍 on a folded post corrects the
+// verdict that folded it. Words that set liked and disliked posts apart form the interest
+// lexicon (src/lib/interest.ts), so posts like the ones you dislike get folded as "Not for you".
+let tasteOn = true;
+let tasteFb = {};        // post key -> "less" | "more"
+let interestLex = null;
+let topicMap = {};       // topic id -> learned preference, newer reactions weighing more
+let topicManual = {};    // topic id -> "less" | "more" chosen in Settings
+function rebuildInterest(taste, votes) {
+  tasteFb = Object.fromEntries(taste.map((v) => [v.key, v.label]));
+  topicMap = SD.topics.topicPrefs(taste, topicManual);
+  interestLex = SD.interest.buildInterest(taste, votes.filter((v) => v.label === "not_slop"));
+}
+let interestTimer = null;
+function scheduleInterest() {
+  clearTimeout(interestTimer);
+  interestTimer = setTimeout(async () => {
+    const { sdTaste = [], sdVotes = [] } = await chrome.storage.local.get(["sdTaste", "sdVotes"]);
+    rebuildInterest(sdTaste, sdVotes);
+    localMemo.clear();
+  }, 400);
+}
+async function react({ key, text, label, handle, score = 0, rage = 0, folded = [] }) {
+  if (!key || (label !== "like" && label !== "dislike")) return { error: "bad reaction" };
+  const { sdTaste = [] } = await chrome.storage.local.get("sdTaste");
+  const rest = sdTaste.filter((v) => v.key !== key);
+  rest.push({ key, text: String(text).slice(0, 280), label: label === "like" ? "more" : "less", handle: handle || undefined, ts: Date.now() });
+  tasteFb[key] = label === "like" ? "more" : "less";
+  await chrome.storage.local.set({ sdTaste: rest.slice(-400) });
+  if (label === "dislike") {
+    if (score >= 50 && !folded.includes("slop")) await feedback({ key, text, label: "slop", handle });
+    if (rage >= 50 && !folded.includes("rage")) await rageVote({ key, text, label: "rage", handle });
+  } else {
+    if (folded.includes("slop")) await feedback({ key, text, label: "not_slop", handle });
+    if (folded.includes("rage")) await rageVote({ key, text, label: "not_rage", handle });
+  }
+  scheduleInterest();
+  return { key, reaction: label };
+}
+async function unreact({ key }) {
+  const { sdTaste = [] } = await chrome.storage.local.get("sdTaste");
+  delete tasteFb[key];
+  await chrome.storage.local.set({ sdTaste: sdTaste.filter((v) => v.key !== key) });
+  await unvote({ key });
+  await rageUnvote({ key });
+  scheduleInterest();
+  return { key };
+}
+
 let rageModel = null;
 let rageFb = {};   // post key -> "rage" | "not_rage" (the reader's votes)
 const ageHours = (iso) => {
@@ -84,8 +138,13 @@ function withRage(r, { text, ctx }) {
   let src = typeof r.rage === "number" ? "model" : "local";
   if (r.pattern === "creator_trusted") { rage = 0; src = "you"; }
   if (fb) { rage = fb === "rage" ? 100 : 0; src = "you"; }
+  const tf = r.key && tasteFb[r.key];
+  const interest = tasteOn ? (tf ? (tf === "less" ? 1 : -1) : SD.interest.interestOf(text, interestLex)) : 0;
+  const tv = tasteOn && !tf ? SD.topics.topicVerdict(text, topicMap) : null;
   return {
-    ...r, rage, rageSrc: src, rageHits: lr.hits, rageNews: Math.round(lr.news * 100) / 100,
+    ...r, topics: SD.topics.topicsOf(text), topic: tv || undefined,
+    interest: Math.round(interest * 100) / 100, reaction: tf ? (tf === "less" ? "dislike" : "like") : undefined,
+    rage, rageSrc: src, rageHits: lr.hits, rageNews: Math.round(lr.news * 100) / 100,
     rageReason: r.rageReason || lr.hits.slice(0, 2).join(", "), rageFb: fb || undefined
   };
 }
@@ -149,6 +208,9 @@ chrome.storage.onChanged?.addListener((ch, area) => {
   if (area !== "local") return;
   if (ch.sdVotes || ch.learn) scheduleRefit();
   // A retrain done elsewhere (the settings page) takes effect here immediately.
+  if (ch.sdTaste || ch.sdVotes) scheduleInterest();
+  if (ch.tasteMode) tasteOn = ch.tasteMode.newValue !== "off";
+  if (ch.topicManual) { topicManual = ch.topicManual.newValue || {}; scheduleInterest(); }
   if (ch.sdRageVotes || ch.learn) scheduleRageRefit();
   if (ch.sdRageModel && !ch.sdRageVotes) rageModel = ch.sdRageModel.newValue || null;
   if (ch.sdModel && !ch.sdVotes && !ch.learn) { model = ch.sdModel.newValue || null; localMemo.clear(); }
@@ -731,7 +793,12 @@ async function analyze(m) {
 async function logFiltered({ key, handle, text, score, explanation }) {
   const { sdFiltered = [] } = await chrome.storage.local.get("sdFiltered");
   const rest = sdFiltered.filter((e) => e.key !== key);
-  if (rest.length === sdFiltered.length) bumpStat("filtered");
+  if (rest.length === sdFiltered.length) {
+    bumpStat("filtered");
+    // Estimated reading effort avoided: words at ~238 wpm plus ~2 s of attention per post.
+    const w = String(text).trim().split(/\s+/).filter(Boolean).length;
+    bumpStat("savedSec", Math.round((w / 238) * 60 + 2));
+  }
   rest.unshift({ key, handle, text: String(text).slice(0, 280), score, explanation, ts: Date.now() });
   await chrome.storage.local.set({ sdFiltered: rest.slice(0, 60) });
   return {};
@@ -774,14 +841,14 @@ async function clearAll({ votes }) {
   cache = {};
   clearTimeout(saveTimer);
   const rm = ["sdCache", "sdSpend", "sdSpendDay", "sdFiltered", "sdStats", "sdRecent", AUTHORS_KEY, PROFILES_KEY];
-  if (votes) { rm.push("sdRageVotes", "sdRageModel"); rageFb = {}; rageModel = null; }
+  if (votes) { rm.push("sdRageVotes", "sdRageModel", "sdTaste"); rageFb = {}; rageModel = null; tasteFb = {}; interestLex = null; topicMap = SD.topics.topicPrefs([], topicManual); }
   if (votes) { rm.push("sdVotes", "sdModel"); model = null; }
   await chrome.storage.local.remove(rm);
   return {};
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  const h = { analyze, feedback, unvote, rageVote, rageUnvote, clear: clearAll, logFiltered, getProfile, saveProfile, profileFailed }[msg?.type];
+  const h = { analyze, feedback, unvote, rageVote, rageUnvote, react, unreact, clear: clearAll, logFiltered, getProfile, saveProfile, profileFailed }[msg?.type];
   if (!h) return false;
   h(msg).then(sendResponse, (e) => sendResponse({ error: String(e.message || e) }));
   return true;

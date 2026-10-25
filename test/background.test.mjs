@@ -101,3 +101,33 @@ test("rage bait: scored on-device with no key, AI answer used when present, vote
   const m = await withKey({ type: "analyze", text: "Honestly I think the policy is wrong, and here is why: the numbers don't add up in the third year.", ctx: { postId: "r3" } });
   assert.equal(m.rage, 12); assert.equal(m.rageSrc, "model"); assert.equal(m.rageReason, "reasoned reply");
 });
+
+test("👎 on news twice makes news fold as a topic; a later 👍 brings it back; undo removes the reaction", async () => {
+  const N1 = "BREAKING: Officials confirmed a wildfire near the coast, police said evacuations began on Friday.";
+  const N2 = "The announcement came after authorities reported the earthquake, according to a statement released today.";
+  const N3 = "JUST IN: Police arrested two suspects, officials said, according to a briefing this morning.";
+  const send = boot({}, ok({}));
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const a1 = await send({ type: "analyze", text: N1, ctx: { postId: "t1" } });
+  assert.equal(a1.topic?.less, false);
+  await send({ type: "react", key: a1.key, text: N1, label: "dislike", score: a1.score, rage: a1.rage });
+  const a2 = await send({ type: "analyze", text: N2, ctx: { postId: "t2" } });
+  await send({ type: "react", key: a2.key, text: N2, label: "dislike", score: a2.score, rage: a2.rage });
+  await wait(700);
+  const a3 = await send({ type: "analyze", text: N3, ctx: { postId: "t3" } });
+  assert.equal(a3.topic.id, "news");
+  assert.equal(a3.topic.less, true, `pref after two dislikes: ${JSON.stringify(a3.topic)}`);
+  assert.equal(a3.reaction, undefined);
+  // reacted posts report their own reaction
+  assert.equal((await send({ type: "analyze", text: N1, ctx: { postId: "t1" } })).reaction, "dislike");
+  // three 👍 on hidden news posts bring the topic back
+  for (const [i, t] of [[4, N3 + " a"], [5, N3 + " b"], [6, N3 + " c"]]) {
+    const r = await send({ type: "analyze", text: t, ctx: { postId: "t" + i } });
+    await send({ type: "react", key: r.key, text: t, label: "like", folded: ["less"] });
+  }
+  await wait(700);
+  assert.equal((await send({ type: "analyze", text: N3 + " d", ctx: { postId: "t7" } })).topic.less, false);
+  // undo drops the reaction
+  await send({ type: "unreact", key: a1.key });
+  assert.equal((await send({ type: "analyze", text: N1, ctx: { postId: "t1" } })).reaction, undefined);
+});

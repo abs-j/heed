@@ -38,6 +38,17 @@
         </label>
       </div>
       <div class="card">
+        <h2>Your 👍 and 👎</h2>
+        <p class="mute">Hover any post and tell it whether you liked it. It learns what you want less of, including whole topics, and updates as you change your mind: 👍 a hidden post and its topic comes back.</p>
+        <label class="field"><span>Posts you don't want</span>
+          <select id="tasteMode">
+            <option value="fold">Fold them into a one-line summary (default)</option>
+            <option value="off">Just record my reactions, don't filter</option>
+          </select>
+          <small class="mute">Folded posts are still one hover away. "Hide completely" under Rage bait also applies here.</small>
+        </label>
+      </div>
+      <div class="card">
         <h2>Rage bait</h2>
         <p class="mute">Posts that exist only to provoke anger or contempt and add nothing new: "X be like" mockery, sweeping claims about a group, rhetorical outrage questions. News, announcements and fresh commentary that adds facts or an argument are left alone, even when they are angry or political.</p>
         <label class="field"><span>Rage-bait posts</span>
@@ -104,6 +115,11 @@
         <label class="field"><span>One per line, up to 5</span>
           <textarea id="customRules" rows="4" placeholder="crypto shilling&#10;rage politics&#10;AI-generated motivational quotes"></textarea>
           <small class="mute">Plain-language topics to fold alongside slop. Checked in the same request, so no extra calls.</small></label>
+      </div>
+      <div class="card" id="topicsCard">
+        <h2 id="topics">Topics</h2>
+        <p class="mute">Learned from your 👍 and 👎, newest counting most. Set a topic by hand to override. A topic only folds posts as "seeing less …"; slop, rage bait and your own 👍 always take priority.</p>
+        <ul id="topicList" class="topics"></ul>
       </div>
       <div class="card">
         <h2 id="creators">Creator rules</h2>

@@ -70,8 +70,9 @@ function drawSpark(stats) {
   const day = s.sdStats?.days?.[new Date().toISOString().slice(0, 10)] || {};
   $("tScanned").textContent = day.scanned || 0;
   $("tFolded").textContent = day.filtered || 0;
-  const onDevice = (day.tier0 || 0) + (day.local || 0);
-  $("tLocal").textContent = day.scanned ? Math.round((onDevice / day.scanned) * 100) + "%" : "–";
+  // Estimated attention saved today: reading time avoided for posts folded or hidden.
+  const mins = (day.savedSec || 0) / 60;
+  $("tLocal").textContent = mins < 1 ? (mins > 0 ? "<1" : "0") : String(Math.round(mins));
   drawSpark(s.sdStats);
   drawDist(s.sdRecent || [], sens);
 

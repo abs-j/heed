@@ -106,7 +106,7 @@
       id: "second",
       label: "generic 'you' address",
       prior: 0.9,
-      fn: (c) => sat(c.words.filter((w) => w === "you" || w === "your" || w === "you're").length, 4)
+      fn: (c) => sat(c.words.filter((w2) => w2 === "you" || w2 === "your" || w2 === "you're").length, 4)
     },
     {
       id: "absolutes",
@@ -131,7 +131,7 @@
       id: "first",
       label: "first-person voice",
       prior: -1.3,
-      fn: (c) => sat(c.words.filter((w) => /^(?:i|i'm|i’m|i've|i’ve|i'd|i'll|my|me|mine|we|our|myself)$/.test(w)).length, 3)
+      fn: (c) => sat(c.words.filter((w2) => /^(?:i|i'm|i’m|i've|i’ve|i'd|i'll|my|me|mine|we|our|myself)$/.test(w2)).length, 3)
     },
     {
       id: "narrative",
@@ -223,14 +223,14 @@
     const words = clean.match(/[a-z$#][a-z0-9'’$#]{2,}/g) || [];
     const out = /* @__PURE__ */ new Set();
     let prev = null;
-    for (const w of words) {
-      if (STOP.has(w)) {
+    for (const w2 of words) {
+      if (STOP.has(w2)) {
         prev = null;
         continue;
       }
-      out.add(w);
-      if (prev) out.add(prev + " " + w);
-      prev = w;
+      out.add(w2);
+      if (prev) out.add(prev + " " + w2);
+      prev = w2;
     }
     return out;
   }
@@ -272,28 +272,28 @@
       y: v.label === "slop" ? 1 : 0
     }));
     let b = b0;
-    const w = [...w0, t0];
+    const w2 = [...w0, t0];
     const p0 = [...w0, t0];
     const clampTo = (v, c) => Math.min(c + MAX_SHIFT, Math.max(c - MAX_SHIFT, v));
     if (data.length >= 4) {
       for (let e = 0; e < epochs; e++) {
-        const gw = new Array(w.length).fill(0);
+        const gw = new Array(w2.length).fill(0);
         let gb = 0;
         for (const { x, y } of data) {
           let z = b;
-          for (let i = 0; i < w.length; i++) z += w[i] * x[i];
+          for (let i = 0; i < w2.length; i++) z += w2[i] * x[i];
           const err = (sigmoid(z) - y) * voteWeight;
           gb += err;
-          for (let i = 0; i < w.length; i++) gw[i] += err * x[i];
+          for (let i = 0; i < w2.length; i++) gw[i] += err * x[i];
         }
         const n = data.length;
         b = clampTo(b - lr * gb / n, b0);
-        for (let i = 0; i < w.length; i++) w[i] = clampTo(w[i] - lr * (gw[i] / n + lambda * (w[i] - p0[i])), p0[i]);
+        for (let i = 0; i < w2.length; i++) w2[i] = clampTo(w2[i] - lr * (gw[i] / n + lambda * (w2[i] - p0[i])), p0[i]);
       }
     }
     return {
       bias: +b.toFixed(4),
-      w: { ...Object.fromEntries(ids.map((id, i) => [id, +w[i].toFixed(4)])), taste: +w[ids.length].toFixed(4) },
+      w: { ...Object.fromEntries(ids.map((id, i) => [id, +w2[i].toFixed(4)])), taste: +w2[ids.length].toFixed(4) },
       lex: pruneLexicon(lex),
       trained: { n: rows.length, at: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) }
     };
@@ -395,14 +395,14 @@
     contrib.sort((a, b) => b[1] - a[1]);
     return { score: Math.round(p * 100), p, hits: contrib.slice(0, 5).map((c) => c[0]) };
   }
-  function sgdStep(w, text, label, lr = 0.15, l2 = 0.02) {
+  function sgdStep(w2, text, label, lr = 0.15, l2 = 0.02) {
     const x = extract(text);
-    let z = w.bias;
+    let z = w2.bias;
     FEATURES.forEach((f, i) => {
-      z += (w.w[f.id] ?? f.prior) * x[i];
+      z += (w2.w[f.id] ?? f.prior) * x[i];
     });
     const err = sigmoid2(z) - label;
-    const next = { bias: w.bias - lr * err, w: { ...w.w } };
+    const next = { bias: w2.bias - lr * err, w: { ...w2.w } };
     FEATURES.forEach((f, i) => {
       const cur = next.w[f.id] ?? f.prior;
       next.w[f.id] = cur - lr * (err * x[i] + l2 * (cur - f.prior));
@@ -411,7 +411,7 @@
   }
   var learn = {
     refit: (votes) => refit(votes, DEFAULT_WEIGHTS),
-    evaluate: (votes) => evaluate(votes, DEFAULT_WEIGHTS, (t, w) => localScore(t, w).score)
+    evaluate: (votes) => evaluate(votes, DEFAULT_WEIGHTS, (t, w2) => localScore(t, w2).score)
   };
 
   // src/lib/scoring.ts
@@ -680,7 +680,7 @@ ${JSON.stringify(state)}${filters}`;
       id: "firsthand",
       label: "first-hand experience",
       prior: -1.3,
-      fn: (c) => sat2(c.words.filter((w) => /^(?:i|i'm|i’m|i've|i’ve|my|me|we|our|myself)$/.test(w)).length, 3)
+      fn: (c) => sat2(c.words.filter((w2) => /^(?:i|i'm|i’m|i've|i’ve|my|me|we|our|myself)$/.test(w2)).length, 3)
     },
     {
       id: "personal",
@@ -725,28 +725,152 @@ ${JSON.stringify(state)}${filters}`;
     const ids = RAGE_FEATURES.map((f) => f.id);
     const w0 = ids.map((id, i) => base.w[id] ?? RAGE_FEATURES[i].prior);
     let b = base.bias;
-    const w = [...w0];
+    const w2 = [...w0];
     if (rows.length >= 4) {
       const data = rows.map((v) => ({ x: rageVector(v.text), y: v.label === "rage" ? 1 : 0 }));
       const clampTo = (v, c) => Math.min(c + 1.5, Math.max(c - 1.5, v));
       for (let e = 0; e < 160; e++) {
-        const gw = new Array(w.length).fill(0);
+        const gw = new Array(w2.length).fill(0);
         let gb = 0;
         for (const { x, y } of data) {
           let z = b;
-          for (let i = 0; i < w.length; i++) z += w[i] * x[i];
+          for (let i = 0; i < w2.length; i++) z += w2[i] * x[i];
           const err = (sigmoid3(z) - y) * 2;
           gb += err;
-          for (let i = 0; i < w.length; i++) gw[i] += err * x[i];
+          for (let i = 0; i < w2.length; i++) gw[i] += err * x[i];
         }
         b = clampTo(b - 0.2 * gb / data.length, base.bias);
-        for (let i = 0; i < w.length; i++) w[i] = clampTo(w[i] - 0.2 * (gw[i] / data.length + 0.06 * (w[i] - w0[i])), w0[i]);
+        for (let i = 0; i < w2.length; i++) w2[i] = clampTo(w2[i] - 0.2 * (gw[i] / data.length + 0.06 * (w2[i] - w0[i])), w0[i]);
       }
     }
-    return { bias: +b.toFixed(4), w: Object.fromEntries(ids.map((id, i) => [id, +w[i].toFixed(4)])), trained: { n: rows.length, at: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) } };
+    return { bias: +b.toFixed(4), w: Object.fromEntries(ids.map((id, i) => [id, +w2[i].toFixed(4)])), trained: { n: rows.length, at: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) } };
+  }
+
+  // src/lib/interest.ts
+  var interest_exports = {};
+  __export(interest_exports, {
+    INTEREST_FOLD: () => INTEREST_FOLD,
+    buildInterest: () => buildInterest,
+    interestOf: () => interestOf,
+    interestVerdict: () => interestVerdict
+  });
+  var INTEREST_FOLD = 0.6;
+  function buildInterest(taste, kept) {
+    const rows = [
+      ...taste.filter((v) => v.label === "less").map((v) => ({ text: v.text, label: "slop" })),
+      ...taste.filter((v) => v.label === "more").map((v) => ({ text: v.text, label: "not_slop" })),
+      ...kept.map((v) => ({ text: v.text, label: "not_slop" }))
+    ];
+    return buildLexicon(rows);
+  }
+  var interestOf = (text, lex) => tasteOf(text, lex);
+  var interestVerdict = (score) => score >= INTEREST_FOLD ? "less" : score <= -INTEREST_FOLD ? "more" : null;
+
+  // src/lib/topics.ts
+  var topics_exports = {};
+  __export(topics_exports, {
+    HALF_LIFE_DAYS: () => HALF_LIFE_DAYS,
+    TOPICS: () => TOPICS,
+    TOPIC_FOLD: () => TOPIC_FOLD,
+    topicPrefs: () => topicPrefs,
+    topicVerdict: () => topicVerdict,
+    topicsOf: () => topicsOf
+  });
+  var w = (s) => new RegExp(`\\b(?:${s})\\b`, "gi");
+  var TOPICS = [
+    {
+      id: "news",
+      label: "News",
+      strong: /\b(?:breaking|just in|developing|according to)\b|🚨/i,
+      re: w("reported|reports?|announced|officials?|spokes\\w+|statement|confirmed|authorities|police|briefing|press conference|investigation|killed|dead|arrested|evacuat\\w+|earthquake|wildfire|hurricane|strikes?|ceasefire|headline|sources? say")
+    },
+    {
+      id: "politics",
+      label: "Politics",
+      re: w("election|votes?|voted|senate|congress|parliament|president|prime minister|trump|biden|harris|democrats?|republicans?|liberals?|conservatives?|policy|tariffs?|immigration|border|campaign|governor|ballot|maga|left-wing|right-wing|labor party|government")
+    },
+    {
+      id: "sports",
+      label: "Sports",
+      re: w("nba|nfl|mlb|nhl|premier league|playoffs?|touchdown|quarterback|goals?|scored|lakers|celtics|bucks|heat|spurs|season|coach|draft|fixtures?|world series|final|halftime|championship|league|tournament|wembanyama")
+    },
+    {
+      id: "crypto",
+      label: "Crypto",
+      re: w("bitcoin|btc|eth|ethereum|crypto|tokens?|airdrops?|presale|memecoin|solana|nfts?|defi|wallets?|altcoins?|whitelist")
+    },
+    {
+      id: "tech",
+      label: "Tech & AI",
+      re: w("ai|llms?|gpt|openai|anthropic|claude|gemini|startups?|software|apps?|api|open source|nvidia|chips?|developers?|code|python|rust|javascript|programming|robots?|grok|model|compiler|database")
+    },
+    {
+      id: "finance",
+      label: "Markets & finance",
+      re: w("stocks?|markets?|fed|rates?|inflation|earnings|etf|s&p|nasdaq|ipo|invest\\w*|revenue|portfolio|bonds?|economy|gdp|recession|dollar|shares|dividend")
+    },
+    {
+      id: "entertainment",
+      label: "Entertainment",
+      re: w("movies?|film|trailer|series|finale|netflix|album|songs?|tour|concert|oscars?|box office|streaming|episodes?|anime|marvel|zelda|nintendo|playstation|xbox|gameplay|season \\d")
+    },
+    {
+      id: "culture",
+      label: "Culture war",
+      re: w("woke|dei|trans|gender|abortion|racis[mt]|feminis\\w+|islam|muslims?|christians?|atheists?|religion|white people|black people|immigrants?|boomers?|gen ?z|liberals?|conservatives?")
+    },
+    {
+      id: "health",
+      label: "Health",
+      re: w("health|doctors?|cancer|vaccines?|diet|fasting|sleep|exercise|mental health|therapy|supplements?|nutrition|gut|workout")
+    },
+    {
+      id: "science",
+      label: "Science",
+      re: w("nasa|space|physics|climate|research|study|paper|astronomy|species|quantum|biology|researchers?|telescope|experiment")
+    }
+  ];
+  var count3 = (s, re3) => new Set(s.toLowerCase().match(re3) || []).size;
+  function topicsOf(text) {
+    const short = text.trim().split(/\s+/).length <= 12;
+    const scored = [];
+    for (const t of TOPICS) {
+      const n = count3(text, t.re) + (t.strong?.test(text) ? 2 : 0);
+      if (n >= 2 || n >= 1 && short) scored.push([t.id, n]);
+    }
+    return scored.sort((a, b) => b[1] - a[1]).slice(0, 2).map((x) => x[0]);
+  }
+  var TOPIC_FOLD = -0.5;
+  var HALF_LIFE_DAYS = 45;
+  function topicPrefs(reactions, manual = {}, now = Date.now()) {
+    const acc = {};
+    for (const r of reactions) {
+      const age = r.ts ? Math.max(0, (now - r.ts) / 864e5) : 0;
+      const wgt = Math.pow(0.5, age / HALF_LIFE_DAYS);
+      const top = topicsOf(r.text)[0];
+      if (!top) continue;
+      const a = acc[top] ||= { l: 0, d: 0 };
+      if (r.label === "more") a.l += wgt;
+      else a.d += wgt;
+    }
+    const out = {};
+    for (const t of TOPICS) {
+      const a = acc[t.id] || { l: 0, d: 0 };
+      let pref = (a.l - a.d) / (a.l + a.d + 1.5);
+      const m = manual[t.id];
+      if (m) pref = m === "less" ? -0.9 : 0.9;
+      out[t.id] = { id: t.id, pref: Math.round(pref * 100) / 100, likes: Math.round(a.l * 10) / 10, dislikes: Math.round(a.d * 10) / 10, manual: m };
+    }
+    return out;
+  }
+  function topicVerdict(text, prefs) {
+    const top = topicsOf(text)[0];
+    if (!top || !prefs[top]) return null;
+    const p = prefs[top].pref;
+    return { id: top, label: TOPICS.find((t) => t.id === top).label, less: p <= TOPIC_FOLD, more: p >= -TOPIC_FOLD };
   }
 
   // src/lib/index.ts
-  var SD = { ...scoring_exports, localScore, sgdStep, DEFAULT_WEIGHTS, learn, FEATURES, providers: providers_exports, router: router_exports, rage: rage_exports };
+  var SD = { ...scoring_exports, localScore, sgdStep, DEFAULT_WEIGHTS, learn, FEATURES, providers: providers_exports, router: router_exports, rage: rage_exports, interest: interest_exports, topics: topics_exports };
   globalThis.SD = SD;
 })();

@@ -5,7 +5,7 @@
 //   why    - a popover with the score gauge and every signal behind the number
 // Fine posts get a card with a dock only, so by default they look untouched.
 
-export type PostState = "slop" | "rage" | "border" | "ok";
+export type PostState = "slop" | "rage" | "less" | "border" | "ok";
 
 export interface View {
   state: PostState;
@@ -18,17 +18,13 @@ export interface View {
   folded: number;                // extra thread posts folded with this one
   strip: boolean;                // show the folded receipt row
   chipAlways: boolean;           // dock visible without hovering
-  voted?: "slop" | "not_slop";
-  rageOn: boolean;               // rage-bait filter is active, so the Rage bait action is offered
-  rageVoted?: "rage" | "not_rage";
+  reaction?: "like" | "dislike";   // the reader's own thumb on this post
   whyOpen: boolean;
 }
 
 export interface Actions {
-  vote(label: "slop" | "not_slop"): void;
-  undo(): void;
-  rage(label: "rage" | "not_rage"): void;
-  rageUndo(): void;
+  react(label: "like" | "dislike"): void;
+  unreact(): void;
   peek(): void;
   toggleWhy(viaKeyboard?: boolean): void;
 }
@@ -37,7 +33,7 @@ export interface Card { host: HTMLElement; setOpen(open: boolean): void; focusPa
 
 const CSS = `
 :host { all: initial; position: absolute; inset: 0; z-index: 5; pointer-events: none; display: block;
-  --slop: var(--sd-slop, #f2545b); --rage: var(--sd-rage, #f0883e); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
+  --slop: var(--sd-slop, #f2545b); --rage: var(--sd-rage, #f0883e); --less: var(--sd-less, #8fa3c8); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
   font: 400 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", Inter, Roboto, sans-serif;
   color: var(--sd-fg, #0f1419); }
 * { box-sizing: border-box; }
@@ -60,6 +56,7 @@ button:focus-visible, .strip:focus-visible { outline: 2px solid var(--c, var(--s
 .open .strip { opacity: 0; transform: translateY(-4px); pointer-events: none; }
 .strip:hover { background: color-mix(in srgb, var(--c) 12%, var(--sd-bg, #fff)); }
 .score { flex: none; display: grid; justify-items: center; line-height: 1; min-width: 38px; }
+.score b.ico svg { width: 22px; height: 22px; }
 .score b { font-size: 22px; font-weight: 700; color: var(--c); letter-spacing: -.02em; }
 .score i { font-style: normal; font-size: 9px; letter-spacing: .14em; font-weight: 700; color: var(--c); margin-top: 3px; opacity: .85; }
 .sep { flex: none; width: 1px; align-self: stretch; margin: 12px 0; background: color-mix(in srgb, var(--c) 25%, transparent); }
@@ -90,7 +87,9 @@ button:focus-visible, .strip:focus-visible { outline: 2px solid var(--c, var(--s
 .dot:hover { background: color-mix(in srgb, var(--sd-fg, #000) 8%, transparent); }
 .act { padding: 3px 9px; border-radius: 999px; font-weight: 650; font-size: 12px; color: var(--sd-mute, #536471); }
 .act:hover { background: color-mix(in srgb, var(--sd-fg, #000) 9%, transparent); color: var(--sd-fg, #0f1419); }
-.act.lead { color: var(--sd-fg, #0f1419); } .act.s:hover { color: var(--slop); } .act.r:hover { color: var(--rage); } .act.n:hover { color: var(--ok); }
+.act.thumb { display: inline-grid; place-items: center; padding: 4px 8px; }
+.act.thumb svg { width: 15px; height: 15px; }
+.act.thumb.like:hover { color: var(--ok); } .act.thumb.dislike:hover { color: var(--slop); } .act.n:hover { color: var(--ok); }
 .voted { padding: 3px 8px 3px 10px; font-size: 12px; color: var(--sd-mute, #536471); }
 .voted b { color: var(--sd-fg, #0f1419); font-weight: 650; }
 
@@ -117,10 +116,12 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 `;
 
+const THUMB_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>';
+const THUMB_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>';
 const SVG_CHEVRON = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>';
 
-const colorOf = (v: View) => (v.state === "slop" ? "var(--slop)" : v.state === "rage" ? "var(--rage)" : v.state === "border" ? "var(--warn)" : "var(--ok)");
-const verdict = (v: View) => (v.state === "slop" ? "SLOP" : v.state === "rage" ? "RAGE" : v.state === "border" ? "UNSURE" : "OK");
+const colorOf = (v: View) => (v.state === "slop" ? "var(--slop)" : v.state === "rage" ? "var(--rage)" : v.state === "less" ? "var(--less)" : v.state === "border" ? "var(--warn)" : "var(--ok)");
+const verdict = (v: View) => (v.state === "slop" ? "SLOP" : v.state === "rage" ? "RAGE" : v.state === "less" ? "LESS" : v.state === "border" ? "UNSURE" : "OK");
 
 function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const n = document.createElement(tag);
@@ -171,9 +172,12 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
     const strip = h("div", "strip");
     strip.setAttribute("role", "button");
     strip.tabIndex = 0;
-    strip.setAttribute("aria-label", `Folded post, ${v.state === "rage" ? "rage bait" : "slop"} score ${v.score}. ${v.title}. Press Enter to peek.`);
+    strip.setAttribute("aria-label", `Folded post, ${v.state === "rage" ? "rage bait" : v.state === "less" ? "not for you" : "slop"} score ${v.score}. ${v.title}. Press Enter to peek.`);
     strip.setAttribute("aria-expanded", String(open));
-    const score = h("div", "score mono"); score.append(h("b", undefined, String(v.score)), h("i", undefined, verdict(v)));
+    const score = h("div", "score mono");
+    const big = h("b", undefined, v.state === "less" ? "" : String(v.score));
+    if (v.state === "less") { big.insertAdjacentHTML("beforeend", THUMB_DOWN); big.classList.add("ico"); }
+    score.append(big, h("i", undefined, verdict(v)));
     const info = h("div", "info");
     const sub = h("div", "sub");
     if (v.handle) sub.append(h("span", "h", "@" + v.handle));
@@ -195,33 +199,18 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
     dot.setAttribute("aria-expanded", String(v.whyOpen));
     dotEl = dot;
     dock.append(dot);
-    const rageBtn = (label: "rage" | "not_rage") => {
-      const b = btn("act r", label === "rage" ? "Rage bait" : "Not rage bait", () => act.rage(label), label === "rage" ? "Mark as rage bait (Alt+R)" : "This isn't rage bait");
-      b.setAttribute("aria-label", label === "rage" ? "Mark this post as rage bait" : "This post is not rage bait");
-      return b;
-    };
-    if (v.rageVoted && !v.voted) {
-      const vt = h("span", "voted"); vt.append("Marked ", h("b", undefined, v.rageVoted === "rage" ? "rage bait" : "not rage bait"));
-      dock.append(vt, btn("act", "Undo", () => act.rageUndo(), "Undo (Alt+R)"));
-    } else if (v.state === "rage" && !v.voted) {
-      dock.append(rageBtn("not_rage"));
-      const vs = btn("act s", "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
-      vs.setAttribute("aria-label", "Mark this post as slop");
-      dock.append(vs);
-    } else if (v.voted) {
-      const vt = h("span", "voted"); vt.append("Marked ", h("b", undefined, v.voted === "slop" ? "slop" : "not slop"));
-      dock.append(vt, btn("act", "Undo", () => act.undo(), "Undo (Alt+U)"));
+    if (v.reaction) {
+      const vt = h("span", "voted"); vt.append("You ", h("b", undefined, v.reaction === "like" ? "liked this" : "didn't like this"));
+      dock.append(vt, btn("act", "Undo", () => act.unreact(), "Undo (Alt+U)"));
     } else {
-      // A post that looks fine only needs one obvious action: tell it what it missed.
-      const vs = btn("act s" + (v.state === "ok" ? " lead" : ""), v.state === "ok" ? "Mark slop" : "Slop", () => act.vote("slop"), "Mark as slop (Alt+S)");
-      vs.setAttribute("aria-label", "Mark this post as slop");
-      dock.append(vs);
-      if (v.rageOn) dock.append(rageBtn("rage"));
-      if (v.state !== "ok") {
-        const vn = btn("act n", "Not slop", () => act.vote("not_slop"), "Mark as not slop (Alt+N)");
-        vn.setAttribute("aria-label", "Mark this post as not slop");
-        dock.append(vn);
-      }
+      const thumb = (kind: "like" | "dislike") => {
+        const b = btn("act thumb " + kind, "", () => act.react(kind),
+          kind === "like" ? "I liked this (Alt+L)" : "I didn't like this (Alt+D). It will count for less next time.");
+        b.setAttribute("aria-label", kind === "like" ? "I liked this post" : "I didn't like this post");
+        b.insertAdjacentHTML("beforeend", kind === "like" ? THUMB_UP : THUMB_DOWN);
+        return b;
+      };
+      dock.append(thumb("like"), thumb("dislike"));
     }
     wrap.append(dock);
 
@@ -231,14 +220,14 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
     why.setAttribute("aria-label", "Why this score");
     why.tabIndex = -1;
     whyEl = why;
-    why.append(h("h4", undefined, `${v.state === "slop" ? "Slop" : v.state === "rage" ? "Rage bait" : v.state === "border" ? "Unsure" : "Looks fine"} · ${v.score}/100`),
+    why.append(h("h4", undefined, `${v.state === "slop" ? "Slop" : v.state === "rage" ? "Rage bait" : v.state === "less" ? "Not for you" : v.state === "border" ? "Unsure" : "Looks fine"} · ${v.score}/100`),
       h("p", "lead", `${v.title}. Margin: ${marginLabel(v)}.`));
     const gauge = h("div", "gauge");
     const pin = h("div", "pin"); pin.style.left = `${v.score}%`;
     const thr = h("div", "thr"); thr.style.left = `${v.threshold}%`;
     gauge.append(thr, pin);
     const scale = h("div", "scale mono"); scale.append(h("span", undefined, "0 genuine"), h("span", undefined, `line ${v.threshold}`), h("span", undefined, "100 slop"));
-    why.append(gauge, scale);
+    if (v.state !== "less") why.append(gauge, scale);
     if (v.signals.length) { const sg = h("div", "sigs"); for (const s of v.signals) sg.append(h("span", "chip", s)); why.append(sg); }
     const rows = h("dl", "rows");
     for (const [k, val] of v.details) { const r = h("div", "row"); r.append(h("dt", undefined, k), h("dd", undefined, val)); rows.append(r); }
