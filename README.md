@@ -67,6 +67,10 @@ Sensitivity sets the score threshold at which a post counts as slop.
 The API key lives in `chrome.storage.local` and is only used by the background worker. Text of
 posts you view is sent to OpenRouter/TypeSafe for scoring. No other network access.
 
+## Engines and providers (v2)
+- **Tiered by default:** the on-device classifier settles clear-cut posts (score ≤ 20 or ≥ 90) with no network call; only uncertain posts go to the AI model. Choose "AI model for every post" or "Local only" in settings.
+- **Providers:** Jev via OpenRouter (original), Anthropic (Claude), or any OpenAI-compatible endpoint (OpenAI, OpenRouter chat, Ollama, LM Studio; no key needed on localhost). Custom hosts ask for permission when you save. Spend cap currently only tracks Jev costs.
+
 ## Development (v2 work in progress)
 - `lib.js` is **generated** from `src/lib/*.ts`: run `npm install && npm run build` after editing, then reload the extension.
 - Local classifier: `src/lib/features.ts` (≈40 hand-weighted features) + `src/lib/weights.json` (trained). `npm run train [backup.json]` retrains, `npm run eval` compares it with the frozen v1.5 heuristic on the seed and held-out corpora, `npm test` builds and runs everything.

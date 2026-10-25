@@ -243,7 +243,7 @@ async function recordAuthor(handle, text, score) {
   await chrome.storage.local.set({ [AUTHORS_KEY]: all });
 }
 
-async function callJev(text, ctx, apiKey) {
+async function buildContext(text, ctx) {
   const { examples, creator: votedOn } = await getFeedbackExamples(text, ctx?.handle);
   const author = await getAuthor(ctx?.handle);
   const prevType = (await getProfileRecord(ctx?.handle))?.type;
@@ -282,6 +282,11 @@ async function callJev(text, ctx, apiKey) {
     ...(ctx?.context ? { feed_context: ctx.context } : {}),
     ...(examples.length ? { reader_labelled_examples: examples } : {})
   };
+  return { state, examples, votedOn, rules };
+}
+
+async function callJev(text, ctx, apiKey) {
+  const { state, examples, votedOn, rules } = await buildContext(text, ctx);
   const body = {
     model: MODEL,
     state,
@@ -349,23 +354,80 @@ async function callJev(text, ctx, apiKey) {
   const t = data.answers?.account_type;
   const acct = t?.choice in ACCOUNT_TYPES ? t.choice : null;
   const acctConf = t?.probabilities?.[acct] ?? t?.confidence ?? 0;
-  if (acct && ctx?.handle) patchProfile(ctx.handle, { type: acct, typeTs: Date.now() }).catch(() => {});
   const matched = rules.filter((_, i) => {
     const a = data.answers?.[`rule_${i}`];
     return a?.choice === "match" && (a.probabilities?.match ?? 1) >= 0.6;
   });
-  const hits = SD.localScore(text).hits;
+  return finishResult({ score, pattern, patConf, acct, acctConf, matched, cost: data.usage?.cost || 0 }, text, ctx, { examples, votedOn, rules });
+}
+
+// Turns a provider's parsed answer into the cache/UI result shape.
+function finishResult(a, text, ctx, { examples, votedOn, rules }) {
+  if (a.acct && ctx?.handle) patchProfile(ctx.handle, { type: a.acct, typeTs: Date.now() }).catch(() => {});
   const why = {
-    acctConf: Math.round(acctConf * 100),
-    hits, examples: examples.length, creatorVotes: votedOn || undefined,
+    acctConf: Math.round(a.acctConf * 100),
+    hits: SD.localScore(text).hits, examples: examples.length, creatorVotes: votedOn || undefined,
     profile: ctx?.profile?.raw ? ctx.profile.raw.slice(0, 160) : undefined,
-    reply: !!(ctx?.replyTo || ctx?.parent), quoted: !!ctx?.quoted
+    reply: !!(ctx?.replyTo || ctx?.parent), quoted: !!ctx?.quoted,
+    provider: a.provider
   };
   return {
-    base: score, pattern, conf: Math.round(patConf * 100), cost: data.usage?.cost || 0,
-    acct, acctConf, adjOk: !!ctx?.handle, profiled: !!ctx?.profile?.raw,
-    rules: matched, rulesSig: rules.join("|"), why
+    base: a.score, pattern: a.pattern, conf: Math.round(a.patConf * 100), cost: a.cost,
+    acct: a.acct, acctConf: a.acctConf, adjOk: !!ctx?.handle, profiled: !!ctx?.profile?.raw,
+    rules: a.matched, rulesSig: rules.join("|"), why
   };
+}
+
+// Chat-style providers (Anthropic, OpenAI-compatible incl. Ollama). Same context, JSON reply.
+async function callChat(text, ctx, cfg) {
+  const { state, examples, votedOn, rules } = await buildContext(text, ctx);
+  const req = SD.providers.buildRequest(cfg, state, rules);
+  const res = await fetch(req.url, { method: "POST", headers: req.headers, body: req.body });
+  if (!res.ok) {
+    let msg = "";
+    try { const j = await res.json(); msg = j?.error?.message || j?.error || ""; } catch {}
+    const err = new Error(typeof msg === "string" && msg ? msg : `HTTP ${res.status}`);
+    err.status = res.status;
+    err.retryAfter = Number(res.headers.get("retry-after")) || 0;
+    throw err;
+  }
+  const data = await res.json();
+  const parsed = SD.providers.parseReply(SD.providers.replyText(cfg.provider, data), rules.length);
+  return finishResult({
+    score: parsed.score, pattern: parsed.pattern, patConf: parsed.patConf, acct: parsed.acct, acctConf: parsed.acctConf,
+    matched: parsed.matched.map((i) => rules[i]), cost: 0, provider: cfg.provider
+  }, text, ctx, { examples, votedOn, rules });
+}
+
+// ---- Provider + tier settings -------------------------------------------------
+// Jev keeps its original `apiKey`; other providers store theirs in `providerKeys`.
+async function getProviderConfig() {
+  const s = await chrome.storage.local.get(["provider", "providerModel", "providerBase", "providerKeys", "apiKey"]);
+  const id = SD.providers.PROVIDER_DEFAULTS[s.provider] ? s.provider : "jev";
+  const d = SD.providers.PROVIDER_DEFAULTS[id];
+  return {
+    provider: id,
+    model: (id === "jev" ? "" : s.providerModel) || d.model,
+    baseUrl: (id === "jev" ? "" : s.providerBase) || d.baseUrl,
+    apiKey: id === "jev" ? s.apiKey || "" : s.providerKeys?.[id] || ""
+  };
+}
+async function getTier() {
+  const s = await chrome.storage.local.get(["tierMode", "tierLow", "tierHigh"]);
+  const D = SD.router.TIER_DEFAULTS;
+  return { mode: ["local", "tiered", "llm"].includes(s.tierMode) ? s.tierMode : D.mode, low: s.tierLow ?? D.low, high: s.tierHigh ?? D.high };
+}
+const providerReady = (cfg) => cfg.provider === "jev" ? !!cfg.apiKey : SD.providers.providerReady(cfg);
+const providerName = (cfg) => SD.providers.PROVIDER_DEFAULTS[cfg.provider].label;
+
+// A post the on-device classifier is confident about never reaches the LLM.
+function localConfident(text, key, reason) {
+  const { score, hits } = SD.localScore(text);
+  const list = hits.length ? `: ${hits.slice(0, 3).join(", ")}` : "";
+  const explanation = reason === "confident-slop" ? `Clear slop pattern${list}`
+    : reason === "confident-ok" ? "Specific, personal voice (no slop signals)"
+    : `Local classifier${list}`;
+  return { score, pattern: "local", conf: 0, key, tier: "local", why: { hits, local: true, tier: reason }, explanation };
 }
 
 function explain(r) {
@@ -407,10 +469,11 @@ function pump() {
 }
 
 async function runJob({ key, text, ctx, resolve, reject }) {
+  let cfg = null;
   try {
-    const { apiKey } = await chrome.storage.local.get("apiKey");
-    if (!apiKey) throw Object.assign(new Error("No API key set"), { status: 401 });
-    const r = await callJev(text, ctx, apiKey);
+    cfg = await getProviderConfig();
+    if (!providerReady(cfg)) throw Object.assign(new Error("No API key set"), { status: 401 });
+    const r = cfg.provider === "jev" ? await callJev(text, ctx, cfg.apiKey) : await callChat(text, ctx, cfg);
     cache[key] = {
       base: r.base, pattern: r.pattern, conf: r.conf, acct: r.acct, acctConf: r.acctConf, adjOk: r.adjOk,
       profiled: r.profiled, rules: r.rules, rulesSig: r.rulesSig, why: r.why, ts: Date.now()
@@ -423,11 +486,12 @@ async function runJob({ key, text, ctx, resolve, reject }) {
     resolve(shown);
   } catch (e) {
     const st = e.status;
-    if (st === 401 || st === 403) setStatus({ ok: false, error: "Invalid or missing OpenRouter API key." });
-    else if (st === 402) setStatus({ ok: false, error: "OpenRouter credits exhausted." });
+    const who = cfg ? providerName(cfg) : "the provider";
+    if (st === 401 || st === 403) setStatus({ ok: false, error: `Invalid or missing API key for ${who}.` });
+    else if (st === 402) setStatus({ ok: false, error: `${who} credits exhausted.` });
     else if (st === 429) {
       pausedUntil = Date.now() + Math.max(15000, e.retryAfter * 1000);
-      setStatus({ ok: false, error: "Rate limited by OpenRouter; pausing briefly." });
+      setStatus({ ok: false, error: `Rate limited by ${who}; pausing briefly.` });
     } else setStatus({ ok: false, error: `Request failed: ${e.message}` });
     if (st === 401 || st === 402 || st === 403) pausedUntil = Date.now() + 60000;
     reject(e);
@@ -457,10 +521,20 @@ async function analyzeInner({ text, ctx, refine }) {
   if (hit && (hit.rulesSig || "") === sig && !refine) return present(hit, key);
   const keepHit = hit;
 
-  const { apiKey } = await chrome.storage.local.get("apiKey");
-  if (!apiKey) {
-    setStatus({ ok: false, error: "Add your OpenRouter API key in settings. Using local checks only." });
+  const cfg = await getProviderConfig();
+  const ready = providerReady(cfg);
+  if (!ready) {
+    setStatus({ ok: false, error: `Add your ${providerName(cfg)} key in settings. Using the local classifier only.` });
     return localResult(text, key, "nokey");
+  }
+  // Tier 0: the on-device classifier answers on its own when it is confident (or when
+  // the reader chose local-only), so those posts never cost an API call.
+  const tier = await getTier();
+  const rt = SD.router.route(SD.localScore(text).score, { ...tier, llmReady: ready });
+  if (rt.use === "local") {
+    if (refine && keepHit) return present(keepHit, key);
+    if (!refine) bumpStat("tier0");
+    return localConfident(text, key, rt.reason);
   }
   if (await overBudget()) return refine && keepHit ? present(keepHit, key) : localResult(text, key, "budget");
   if (Date.now() < pausedUntil || queue.length >= QUEUE_MAX) return refine && keepHit ? present(keepHit, key) : localResult(text, key, "error");

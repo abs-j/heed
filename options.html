@@ -22,9 +22,32 @@
     <small class="mute">Lower = flags more posts.</small>
   </label>
 
-  <label class="field"><span>OpenRouter API key</span>
-    <input type="password" id="apiKey" placeholder="sk-or-v1-..." autocomplete="off">
-    <small class="mute">Stored only in this browser's extension storage. Post text is sent to OpenRouter for scoring.</small>
+  <label class="field"><span>Detection engine</span>
+    <select id="tierMode">
+      <option value="tiered">Tiered: local classifier first, AI model only when unsure (recommended)</option>
+      <option value="llm">AI model for every post</option>
+      <option value="local">Local classifier only (free, private, no key)</option>
+    </select>
+    <small class="mute">Tiered answers clear-cut posts on this device and only sends uncertain ones to the model, cutting cost and latency.</small>
+  </label>
+
+  <label class="field"><span>AI provider</span>
+    <select id="provider">
+      <option value="jev">Jev via OpenRouter</option>
+      <option value="anthropic">Anthropic (Claude)</option>
+      <option value="openai">OpenAI-compatible (OpenAI, OpenRouter, Ollama, LM Studio)</option>
+    </select>
+  </label>
+  <label class="field" id="modelRow"><span>Model</span>
+    <input type="text" id="providerModel" autocomplete="off" spellcheck="false">
+  </label>
+  <label class="field" id="baseRow"><span>Endpoint URL</span>
+    <input type="text" id="providerBase" autocomplete="off" spellcheck="false">
+    <small class="mute">For Ollama use http://localhost:11434/v1/chat/completions and start it with OLLAMA_ORIGINS=chrome-extension://* (no key needed).</small>
+  </label>
+  <label class="field"><span id="keyLabel">API key</span>
+    <input type="password" id="apiKey" autocomplete="off">
+    <small class="mute">Stored only in this browser's extension storage. Post text is sent to the provider you choose, only for posts the local classifier can't settle.</small>
   </label>
 
   <label class="field"><span>Account-type influence: <b id="iv"></b>%</span>

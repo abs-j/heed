@@ -3,7 +3,9 @@
 import { localScore, sgdStep, DEFAULT_WEIGHTS } from "./model";
 import { FEATURES } from "./features";
 import * as scoring from "./scoring";
+import * as providers from "./providers";
+import * as router from "./router";
 
-const SD = { ...scoring, localScore, sgdStep, DEFAULT_WEIGHTS, FEATURES };
+const SD = { ...scoring, localScore, sgdStep, DEFAULT_WEIGHTS, FEATURES, providers, router };
 export type SDApi = typeof SD;
 (globalThis as unknown as { SD: SDApi }).SD = SD;

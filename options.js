@@ -1,12 +1,42 @@
 const $ = (id) => document.getElementById(id);
+const PROV = {
+  jev: { label: "OpenRouter API key", model: "", base: "", ph: "sk-or-v1-..." },
+  anthropic: { label: "Anthropic API key", model: "claude-haiku-5-5", base: "https://api.anthropic.com/v1/messages", ph: "sk-ant-..." },
+  openai: { label: "API key (leave empty for local servers)", model: "gpt-4.1-mini", base: "https://api.openai.com/v1/chat/completions", ph: "sk-..." }
+};
+let state = { keys: {}, jev: "", models: {}, bases: {}, prov: "jev" };
+// Keep each provider's key/model/endpoint separate while the select changes.
+function stash() {
+  const k = $("apiKey").value.trim();
+  if (state.prov === "jev") state.jev = k; else state.keys[state.prov] = k;
+  if (state.prov !== "jev") { state.models[state.prov] = $("providerModel").value.trim(); state.bases[state.prov] = $("providerBase").value.trim(); }
+}
+function showProvider() {
+  const p = $("provider").value, d = PROV[p];
+  state.prov = p;
+  $("keyLabel").textContent = d.label;
+  $("apiKey").placeholder = d.ph;
+  $("apiKey").value = p === "jev" ? state.jev : state.keys[p] || "";
+  $("modelRow").hidden = $("baseRow").hidden = p === "jev";
+  $("providerModel").value = state.models[p] || d.model;
+  $("providerBase").value = state.bases[p] || d.base;
+}
+$("provider").addEventListener("focus", stash);
+$("provider").addEventListener("change", showProvider);
 const sv = () => ($("sv").textContent = $("sensitivity").value);
 
 async function load() {
-  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "sdStatus", "sdSpend", "dailyBudget", "profiles", "customRules", "acctInfluence"]);
+  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "sdStatus", "sdSpend", "dailyBudget", "profiles", "customRules", "acctInfluence", "provider", "providerModel", "providerBase", "providerKeys", "tierMode"]);
+  const prov = PROV[s.provider] ? s.provider : "jev";
+  $("provider").value = prov;
+  $("tierMode").value = s.tierMode || "tiered";
+  state = { keys: s.providerKeys || {}, jev: s.apiKey || "", prov,
+    models: prov !== "jev" && s.providerModel ? { [prov]: s.providerModel } : {},
+    bases: prov !== "jev" && s.providerBase ? { [prov]: s.providerBase } : {} };
+  showProvider();
   $("enabled").checked = s.enabled ?? true;
   $("mode").value = s.mode || "blur";
   $("sensitivity").value = s.sensitivity ?? 60;
-  $("apiKey").value = s.apiKey || "";
   $("dailyBudget").value = s.dailyBudget || 0;
   $("profiles").checked = s.profiles ?? true;
   $("acctInfluence").value = s.acctInfluence ?? 100;
@@ -20,11 +50,25 @@ async function load() {
 $("sensitivity").addEventListener("input", sv);
 $("acctInfluence").addEventListener("input", () => ($("iv").textContent = $("acctInfluence").value));
 $("save").addEventListener("click", async () => {
+  stash();
+  const prov = $("provider").value;
+  // A custom endpoint on another host needs the user's permission (granted per origin).
+  if (prov !== "jev") {
+    try {
+      const origin = new URL(state.bases[prov]).origin + "/*";
+      if (!(await chrome.permissions.contains({ origins: [origin] })) && !(await chrome.permissions.request({ origins: [origin] }))) {
+        $("msg").textContent = "Permission to reach that endpoint was declined.";
+        return;
+      }
+    } catch { $("msg").textContent = "Endpoint URL is not valid."; return; }
+  }
   await chrome.storage.local.set({
+    provider: prov, providerModel: prov === "jev" ? "" : state.models[prov], providerBase: prov === "jev" ? "" : state.bases[prov],
+    providerKeys: state.keys, tierMode: $("tierMode").value,
     enabled: $("enabled").checked,
     mode: $("mode").value,
     sensitivity: Number($("sensitivity").value),
-    apiKey: $("apiKey").value.trim(),
+    apiKey: state.jev,
     profiles: $("profiles").checked,
     acctInfluence: Number($("acctInfluence").value),
     customRules: $("customRules").value.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 5),

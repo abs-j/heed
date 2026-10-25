@@ -1,11 +1,14 @@
 const $ = (id) => document.getElementById(id);
+const needsKey = (s) => (s.tierMode === "local" ? false
+  : !s.provider || s.provider === "jev" ? !s.apiKey
+  : !s.providerKeys?.[s.provider] && !/^https?:\/\/(localhost|127\.0\.0\.1)/.test(s.providerBase || ""));
 (async () => {
-  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "sdStatus", "sdHealth"]);
+  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "provider", "providerKeys", "providerBase", "tierMode", "sdStatus", "sdHealth"]);
   $("enabled").checked = s.enabled ?? true;
   $("mode").value = s.mode || "blur";
   $("sensitivity").value = s.sensitivity ?? 60;
   $("sv").textContent = $("sensitivity").value;
-  $("status").textContent = !s.apiKey ? "Add your OpenRouter API key in settings."
+  $("status").textContent = needsKey(s) ? "Add an AI provider key in settings (local classifier is running meanwhile)."
     : s.sdStatus && !s.sdStatus.ok ? s.sdStatus.error
     : s.sdHealth?.msg ? s.sdHealth.msg : "";
 })();

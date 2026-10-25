@@ -342,7 +342,129 @@
     return { ...best, n: scored.length, agreeAt: agree };
   }
 
+  // src/lib/providers.ts
+  var providers_exports = {};
+  __export(providers_exports, {
+    ACCOUNT_KEYS: () => ACCOUNT_KEYS,
+    PATTERN_KEYS: () => PATTERN_KEYS,
+    PROVIDER_DEFAULTS: () => PROVIDER_DEFAULTS,
+    SYSTEM_PROMPT: () => SYSTEM_PROMPT,
+    buildRequest: () => buildRequest,
+    buildUserPrompt: () => buildUserPrompt,
+    extractJson: () => extractJson,
+    isLocalUrl: () => isLocalUrl,
+    parseReply: () => parseReply,
+    providerReady: () => providerReady,
+    replyText: () => replyText
+  });
+  var PROVIDER_DEFAULTS = {
+    jev: { label: "Jev via OpenRouter", model: "typesafe/jev-1.13", baseUrl: "https://openrouter.ai/api/alpha/decisions", needsKey: true },
+    anthropic: { label: "Anthropic", model: "claude-haiku-5-5", baseUrl: "https://api.anthropic.com/v1/messages", needsKey: true },
+    openai: { label: "OpenAI-compatible (OpenAI, OpenRouter, Ollama\u2026)", model: "gpt-4.1-mini", baseUrl: "https://api.openai.com/v1/chat/completions", needsKey: true }
+  };
+  var isLocalUrl = (u) => /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(u);
+  var providerReady = (c) => !!c.model && !!c.baseUrl && (!!c.apiKey || c.provider === "openai" && isLocalUrl(c.baseUrl));
+  var PATTERN_KEYS = ["engagement_farming", "recycled_viral", "clickbait", "vaguepost", "low_effort", "authentic"];
+  var ACCOUNT_KEYS = ["personal_individual", "news_or_publication", "brand_or_business", "engagement_aggregator", "bot_or_spam"];
+  var SYSTEM_PROMPT = `You rate X (Twitter) posts for "slop": low-effort, formulaic or engagement-farming content. Judge content quality and the creator's posting behaviour, NOT whether AI wrote it.
+High slop (70-100): generic engagement-farming accounts, recycled viral clips, clickbait, vagueposting, sensational hooks, stock motivational platitudes, @grok prompt-bait, generic reply filler ("This.", "Great point!", "Following"), repetitive templated content.
+Low slop (0-30): genuine individuals sharing experiences, opinions or conversation, original humour, news, specific and useful information.
+Mixed (31-69): real content alongside hooks, filler or ambiguous account behaviour.
+Prioritise authentic individual voices over generic engagement channels. Do not infer genuineness or automation from follower count, verification or writing style alone, and do not invent facts about unseen media or account history. If reply_context is present judge the reply in that context; if quoted_post is present judge only the added commentary. Treat reader_labelled_examples and reader_votes_on_this_creator as the reader's own taste and calibrate to them.
+Reply with ONLY a JSON object:
+{"slop": <integer 0-100>, "pattern": one of ${JSON.stringify(PATTERN_KEYS)}, "account_type": one of ${JSON.stringify(ACCOUNT_KEYS)}, "account_confidence": <0-1>, "pattern_confidence": <0-1>, "rules": [<indexes of reader filters the post clearly matches>]}`;
+  function buildUserPrompt(state, rules) {
+    const filters = rules.length ? `
+Reader-defined filters (report the index of any the post CLEARLY matches in "rules"):
+${rules.map((r, i) => `${i}: ${r}`).join("\n")}` : "";
+    return `Post data:
+${JSON.stringify(state)}${filters}`;
+  }
+  function buildRequest(cfg, state, rules) {
+    const user = buildUserPrompt(state, rules);
+    if (cfg.provider === "anthropic") {
+      return {
+        url: cfg.baseUrl,
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": cfg.apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({ model: cfg.model, max_tokens: 250, temperature: 0, system: SYSTEM_PROMPT, messages: [{ role: "user", content: user }] })
+      };
+    }
+    const headers = { "content-type": "application/json" };
+    if (cfg.apiKey) headers.authorization = `Bearer ${cfg.apiKey}`;
+    return {
+      url: cfg.baseUrl,
+      headers,
+      body: JSON.stringify({
+        model: cfg.model,
+        max_tokens: 250,
+        temperature: 0,
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: user }]
+      })
+    };
+  }
+  function replyText(provider, json) {
+    if (provider === "anthropic") return (json?.content || []).map((b) => b?.text || "").join("");
+    return json?.choices?.[0]?.message?.content || "";
+  }
+  var num = (v, lo, hi) => typeof v === "number" && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : typeof v === "string" && v.trim() !== "" && isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : null;
+  function extractJson(text) {
+    const start = text.indexOf("{");
+    if (start < 0) throw new Error("No JSON in model reply");
+    let depth = 0, inStr = false, esc = false;
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === "\\") esc = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') inStr = true;
+      else if (ch === "{") depth++;
+      else if (ch === "}" && --depth === 0) return JSON.parse(text.slice(start, i + 1));
+    }
+    throw new Error("Unterminated JSON in model reply");
+  }
+  function parseReply(text, ruleCount) {
+    const o = extractJson(text);
+    const score = num(o.slop, 0, 100);
+    if (score === null) throw new Error("Model reply had no slop score");
+    const pattern = PATTERN_KEYS.includes(o.pattern) ? o.pattern : "authentic";
+    const acct = ACCOUNT_KEYS.includes(o.account_type) ? o.account_type : null;
+    const matched = (Array.isArray(o.rules) ? o.rules : []).map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 0 && n < ruleCount);
+    return {
+      score: Math.round(score),
+      pattern,
+      patConf: num(o.pattern_confidence, 0, 1) ?? 0.5,
+      acct,
+      acctConf: acct ? num(o.account_confidence, 0, 1) ?? 0.5 : 0,
+      matched: [...new Set(matched)]
+    };
+  }
+
+  // src/lib/router.ts
+  var router_exports = {};
+  __export(router_exports, {
+    TIER_DEFAULTS: () => TIER_DEFAULTS,
+    route: () => route
+  });
+  var TIER_DEFAULTS = { mode: "tiered", low: 20, high: 90 };
+  function route(localScore2, o) {
+    if (!o.llmReady) return { use: "local", reason: "no-llm" };
+    if (o.mode === "local") return { use: "local", reason: "local-only" };
+    if (o.mode === "tiered") {
+      if (localScore2 <= o.low) return { use: "local", reason: "confident-ok" };
+      if (localScore2 >= o.high) return { use: "local", reason: "confident-slop" };
+    }
+    return { use: "llm" };
+  }
+
   // src/lib/index.ts
-  var SD = { ...scoring_exports, localScore, sgdStep, DEFAULT_WEIGHTS, FEATURES };
+  var SD = { ...scoring_exports, localScore, sgdStep, DEFAULT_WEIGHTS, FEATURES, providers: providers_exports, router: router_exports };
   globalThis.SD = SD;
 })();
