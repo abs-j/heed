@@ -72,7 +72,7 @@ The AI model also sees your most similar votes as examples. Retraining runs in t
 
 ## 6. How I evaluated it, and the limits
 
-I built two small synthetic corpora (≈ 97 slop-style posts, 60 rage-style), plus **held-out sets written after the features were frozen and never used for tuning**. Results:
+I built two small synthetic corpora (97 posts for slop, 60 for rage bait, about half positive in each), plus **held-out sets (24 posts each) written after the features were frozen and never used for tuning**. Results:
 
 | | v1.5 regex heuristic | New classifier |
 |---|---|---|
@@ -106,7 +106,7 @@ Fix: keep all page-level state in **`data-sd-*` attributes**, which React doesn'
 - Injected UI lives in a **closed shadow root**, so X's CSS can't break it and mine can't leak.
 - **Contrast was wrong on light themes:** my red, amber and green were 3.4, 1.9 and 2.6 : 1 against white. Verdict colours now switch with the page theme and reach ≥ 4.5 : 1 (checked numerically).
 - Folded rows are `role="button"` with `aria-expanded` and descriptive labels; the "why" popover is a labelled dialog; opening it by keyboard moves focus into it, and <kbd>Esc</kbd> returns focus to the trigger; every control has a visible focus ring; `prefers-reduced-motion` is respected.
-- Extension pages ran through **axe-core**: it found five issues (no page heading, an unlabelled chart, two unlabelled controls, a missing mode label); all fixed. (The card itself sits in a closed shadow root that axe can't scan, so that part I checked by hand.)
+- Extension pages ran through **axe-core**: it flagged three issues (no page heading, an unlabelled chart, an unlabelled select), all fixed, and I labelled a neighbouring input at the same time. (The card itself sits in a closed shadow root that axe can't scan, so that part I checked by hand.)
 - Keyboard shortcuts use Alt chords because X already claims the bare letters.
 
 ## 10. Testing
