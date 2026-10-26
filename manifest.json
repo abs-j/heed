@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Slop Detector",
-  "version": "2.4.1",
-  "description": "Quietly folds low-effort, formulaic and engagement-farming posts on X. On-device first, optional AI model, learns your taste.",
+  "name": "Heed",
+  "version": "2.5.0",
+  "description": "Decide what deserves your attention on X. Thumbs up or down teaches it; slop, rage bait and topics you want less of fold away.",
   "permissions": [
     "storage"
   ],
@@ -34,7 +34,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Slop Detector"
+    "default_title": "Heed"
   },
   "options_page": "options.html",
   "icons": {
@@ -44,9 +44,5 @@
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
-  },
-  "optional_host_permissions": [
-    "https://*/*",
-    "http://*/*"
-  ]
+  }
 }

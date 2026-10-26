@@ -1,4 +1,4 @@
-# [Name]  *(working title: Slop Detector)*
+# Heed
 ### Decide what deserves your attention.
 
 X decides what to show you. This decides what costs you attention. Tell it with a 👍 or 👎 what you liked and didn't, and everything you'd rather not spend attention on folds into a single quiet line. Still there if you want it, one hover away.

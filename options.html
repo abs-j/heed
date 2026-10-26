@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Slop Detector settings</title>
+<title>Heed settings</title>
 <link rel="stylesheet" href="options.css"></head>
 <body>
 <div class="shell">
   <aside class="side">
-    <div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span><b>Slop Detector</b></div>
+    <div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span><b>Heed</b></div>
     <nav id="nav" aria-label="Settings sections">
       <a href="#general" data-s="general"><svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h14"/><circle cx="7" cy="5" r="1.6"/><circle cx="13" cy="10" r="1.6"/><circle cx="8" cy="15" r="1.6"/></svg>General</a>
       <a href="#detection" data-s="detection"><svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5"/><path d="m13.2 13.2 4 4"/></svg>Detection</a>
@@ -90,7 +90,7 @@
           <input type="text" id="providerModel" autocomplete="off" spellcheck="false"></label>
         <label class="field" id="baseRow"><span>Endpoint URL</span>
           <input type="text" id="providerBase" autocomplete="off" spellcheck="false">
-          <small class="mute">For Ollama use http://localhost:11434/v1/chat/completions and start it with OLLAMA_ORIGINS=chrome-extension://* (no key needed).</small></label>
+          <small class="mute">Allowed hosts: api.openai.com, openrouter.ai, api.anthropic.com, or a model server on this computer (localhost). For Ollama use http://localhost:11434/v1/chat/completions and start it with OLLAMA_ORIGINS=chrome-extension://* (no key needed).</small></label>
         <label class="field"><span id="keyLabel">API key</span>
           <input type="password" id="apiKey" autocomplete="off">
           <small class="mute">Stored only in this browser's extension storage. Post text goes to the provider you choose, only for posts the local classifier can't settle.</small></label>
@@ -100,7 +100,7 @@
         <label class="field"><span>Account-type influence: <b id="iv" class="mono"></b>%</span>
           <input type="range" id="acctInfluence" min="0" max="150" step="10">
           <small class="mute">How much the kind of account (viral-repost channel, individual…) shifts a score. 0 judges the post alone. Applies instantly.</small></label>
-        <label class="row"><span>Check creator profiles<small class="mute">Reads each creator's bio from X's hover card or a profile page you visit.</small></span>
+        <label class="row"><span>Check creator profiles<small class="mute">Off by default. Reads a creator's bio from X's own hover card (opened invisibly for a moment) or a profile page you visit, so the AI model can judge the account. Only used with an AI key.</small></span>
           <span class="switch"><input type="checkbox" id="profiles"><i></i></span></label>
         <label class="field"><span>Daily spend cap (USD, 0 = no cap)</span>
           <input type="number" id="dailyBudget" min="0" step="0.05">

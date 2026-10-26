@@ -1,6 +1,6 @@
 {
-  "name": "slop-detector",
-  "version": "2.4.1",
+  "name": "heed",
+  "version": "2.5.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "test": "npm run build && node --test test/",
     "eval": "node tools/eval.mjs --corpus",
     "icons": "node tools/icons.mjs",
-    "bench": "node tools/bench.mjs"
+    "bench": "node tools/bench.mjs",
+    "pack": "node tools/pack.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

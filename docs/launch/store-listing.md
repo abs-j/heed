@@ -4,8 +4,8 @@ Copy each block into the matching field in the Developer Dashboard.
 
 ## Store listing tab
 
-**Name** (max 75): `[Name]: attention filter for X`  *(working title: Slop Detector for X)*
-> Pick the final name before submitting; check trademarks and that the store name is free.
+**Name** (max 75): `Heed` (the store takes the name from `manifest.json`; keep it to one word)
+> Trademark check for "Heed" (USPTO, IP Australia) is still on the to-do list.
 
 **Summary / short description** (max 132 characters): 
 ```
@@ -64,7 +64,6 @@ It doesn't change what X shows you, only what takes your attention on your scree
 | Content script on `x.com` / `twitter.com` | Reads the text of posts the user is viewing in order to score them, and draws the fold/score interface on them. |
 | Host permission `openrouter.ai`, `api.anthropic.com`, `api.openai.com` | Only if the user enters their own key: sends the text of uncertain posts to the chosen AI provider for scoring. |
 | Host permission `localhost`, `127.0.0.1` | Lets the user point the extension at a local model server (e.g. Ollama) so nothing leaves their computer. |
-| Optional host permissions | Requested per site, at the moment the user enters a custom AI endpoint. |
 
 **Remote code:** No. All code is packaged with the extension.
 
@@ -82,8 +81,8 @@ It doesn't change what X shows you, only what takes your attention on your scree
 - Regions: all.
 
 ## Pre-submission checklist
-- [ ] Zip contains only runtime files (manifest, `lib.js`, `content.js`, `background.js`, CSS/HTML/JS pages, `icons/`).
-- [ ] Hover-card profile lookups default to **off** in the store build (it simulates mouse events on X's page; the riskiest feature for review).
-- [ ] Consider narrowing `optional_host_permissions` (`https://*/*`) to a fixed provider list for the store build, to avoid a slow in-depth review.
+- [x] Zip contains only runtime files: `npm run pack` builds `dist/heed-<version>.zip` (62 KB) and checks version, description length and permissions.
+- [x] Hover-card profile lookups default to **off** (it simulates mouse events on X's page; the riskiest feature for review).
+- [x] No broad or optional host permissions: only x.com/twitter.com, three AI providers and localhost; custom endpoints are limited to those hosts.
 - [ ] Screenshots show no real user's private information.
 - [ ] Description makes no claim to detect AI-written content.

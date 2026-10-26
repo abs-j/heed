@@ -1,4 +1,6 @@
 const $ = (id) => document.getElementById(id);
+// Mirrors host_permissions in manifest.json.
+const ALLOWED_HOSTS = ["openrouter.ai", "api.anthropic.com", "api.openai.com", "localhost", "127.0.0.1"];
 const PROV = {
   jev: { label: "OpenRouter API key", model: "", base: "", ph: "sk-or-v1-..." },
   anthropic: { label: "Anthropic API key", model: "claude-haiku-5-5", base: "https://api.anthropic.com/v1/messages", ph: "sk-ant-..." },
@@ -42,7 +44,7 @@ async function load() {
   $("mode").value = s.mode || "blur";
   $("sensitivity").value = s.sensitivity ?? 60;
   $("dailyBudget").value = s.dailyBudget || 0;
-  $("profiles").checked = s.profiles ?? true;
+  $("profiles").checked = s.profiles ?? false;
   $("acctInfluence").value = s.acctInfluence ?? 100;
   $("iv").textContent = $("acctInfluence").value;
   $("customRules").value = (s.customRules || []).join("\n");
@@ -57,15 +59,15 @@ $("acctInfluence").addEventListener("input", () => ($("iv").textContent = $("acc
 $("save").addEventListener("click", async () => {
   stash();
   const prov = $("provider").value;
-  // A custom endpoint on another host needs the user's permission (granted per origin).
+  // The extension can only reach hosts declared in its manifest (least privilege), so a custom
+  // endpoint must be one of them: the providers below, or a model server on this computer.
   if (prov !== "jev") {
-    try {
-      const origin = new URL(state.bases[prov]).origin + "/*";
-      if (!(await chrome.permissions.contains({ origins: [origin] })) && !(await chrome.permissions.request({ origins: [origin] }))) {
-        $("msg").textContent = "Permission to reach that endpoint was declined.";
-        return;
-      }
-    } catch { $("msg").textContent = "Endpoint URL is not valid."; return; }
+    let host = "";
+    try { host = new URL(state.bases[prov]).hostname; } catch { $("msg").textContent = "Endpoint URL is not valid."; return; }
+    if (!ALLOWED_HOSTS.includes(host)) {
+      $("msg").textContent = `This endpoint isn't allowed. Use one of: ${ALLOWED_HOSTS.join(", ")}.`;
+      return;
+    }
   }
   await chrome.storage.local.set({
     provider: prov, providerModel: prov === "jev" ? "" : state.models[prov], providerBase: prov === "jev" ? "" : state.bases[prov],
@@ -312,7 +314,7 @@ async function renderStats() {
 $("export").addEventListener("click", async () => {
   const s = await chrome.storage.local.get(["sdVotes", "sdCreators", "customRules", "mode", "sensitivity", "dailyBudget", "profiles", "acctInfluence", "sdTaste", "sdRageVotes", "topicManual", "rageMode", "rageThreshold", "tasteMode"]);
   const payload = {
-    app: "slop-detector", version: 1, exported: new Date().toISOString(),
+    app: "heed", version: 1, exported: new Date().toISOString(),
     votes: s.sdVotes || [], reactions: s.sdTaste || [], rageVotes: s.sdRageVotes || [], topicManual: s.topicManual || {},
     creators: s.sdCreators || {}, customRules: s.customRules || [],
     settings: { mode: s.mode, sensitivity: s.sensitivity, dailyBudget: s.dailyBudget, profiles: s.profiles, acctInfluence: s.acctInfluence, rageMode: s.rageMode, rageThreshold: s.rageThreshold, tasteMode: s.tasteMode }
@@ -331,7 +333,7 @@ $("importFile").addEventListener("change", async (ev) => {
   if (!file) return;
   try {
     const d = JSON.parse(await file.text());
-    if (d?.app !== "slop-detector" || !Array.isArray(d.votes)) throw new Error("Not a Slop Detector backup.");
+    if (!["heed", "slop-detector"].includes(d?.app) || !Array.isArray(d.votes)) throw new Error("Not a Heed backup.");
     const cur = await chrome.storage.local.get(["sdVotes", "sdCreators"]);
     const byKey = new Map((cur.sdVotes || []).map((v) => [v.key, v]));
     for (const v of d.votes) {
@@ -387,7 +389,7 @@ function route() {
   h = ALIAS[h] || (SECTIONS.includes(h) ? h : "general");
   document.querySelectorAll("[data-section]").forEach((s) => (s.hidden = s.id !== h));
   document.querySelectorAll("#nav a").forEach((a) => (a.dataset.s === h ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
-  document.title = `${h[0].toUpperCase() + h.slice(1)} · Slop Detector`;
+  document.title = `${h[0].toUpperCase() + h.slice(1)} · Heed`;
 }
 addEventListener("hashchange", route);
 route();

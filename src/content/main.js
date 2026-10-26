@@ -5,7 +5,7 @@ import { mountCard } from "./ui";
   // Any post with a little text gets a card so it can be marked by hand; the background
   // only sends posts of 40+ characters to an AI model (shorter ones are scored locally).
   const MIN_CHARS = 3;
-  const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: true, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, tasteMode: "fold" };
+  const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, tasteMode: "fold" };
   // Only borderline posts get the (slower) creator-profile second pass.
   const BORDER = [35, 75];
 

@@ -252,7 +252,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
   // src/content/main.js
   (() => {
     const MIN_CHARS = 3;
-    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: true, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, tasteMode: "fold" };
+    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, tasteMode: "fold" };
     const BORDER = [35, 75];
     const health = { articles: 0, handles: 0, probes: 0, probesOk: 0, noted: "" };
     function reportHealth() {

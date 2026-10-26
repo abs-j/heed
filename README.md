@@ -1,4 +1,4 @@
-# Slop Detector *(working title; being reframed as a personal attention filter for X)*
+# Heed
 
 A Chrome (Manifest V3) extension that lets **you** decide what deserves your attention on X. Tell it with a 👍 or 👎 what you liked and didn't; posts you'd rather not spend attention on, from slop and rage bait to whole topics you want less of, **fold into a one-line row**. They're still one hover away, they just cost you a glance instead of a read.
 
@@ -69,6 +69,7 @@ npm run eval       # frozen v1.5 heuristic vs the local classifier on the seed a
 npm run train      # retrain shipped weights from the seed corpus (+ optional votes backup)
 npm run bench      # classifier speed (budget: 2 ms/post)
 npm run icons      # regenerate icons/
+npm run pack       # build dist/heed-<version>.zip for the Chrome Web Store (runtime files only, with sanity checks)
 ```
 - `src/lib/*.ts`: scoring, routing, providers, learning (pure, unit-tested). `src/content/`: DOM adapter, scanner, and the Shadow-DOM card (`ui.ts`). `background.js`: service worker (API calls, cache, queue, stats, retraining). `popup.*`, `options.*`: extension pages.
 - Fold/open/dim state lives in `data-sd-*` attributes, not classes: X's React re-renders rewrite class names and would wipe them.

@@ -1,8 +1,8 @@
-# Slop Detector: Privacy Policy
+# Heed: Privacy Policy
 
 *Last updated: [date]. Contact: [email]*
 
-Slop Detector is a browser extension that scores posts on x.com and folds low-quality ones. This policy says exactly what it does with data.
+Heed is a browser extension that scores posts on x.com and folds low-quality ones. This policy says exactly what it does with data.
 
 ## What stays on your device
 Everything below is stored in your browser's extension storage and never sent to me:
@@ -32,7 +32,7 @@ No selling or sharing of data; no advertising; no profiling; no use of your data
 - Uninstalling the extension deletes everything it stored.
 
 ## Not affiliated
-Slop Detector is an independent project and is not affiliated with or endorsed by X Corp. "X" is a trademark of its owner.
+Heed is an independent project and is not affiliated with or endorsed by X Corp. "X" is a trademark of its owner.
 
 ## Changes
 If this policy changes in a way that affects data, I'll update the date above and note it in the extension's release notes.
