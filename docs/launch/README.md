@@ -8,6 +8,7 @@ Drafts of everything you'd publish, written to be read and edited. Facts match t
 | [store-listing.md](store-listing.md) | Users / customers | Chrome Web Store listing: every field the dashboard asks for, permission justifications and data-use answers. |
 | [privacy-policy.md](privacy-policy.md) | Both (required by the store) | A page on your site; its URL goes in the store listing. |
 | [engineering-writeup.md](engineering-writeup.md) | Employers / technical readers | Your site (`/work/slop-detector`), cross-posted to Substack; LinkedIn and Show HN link to it. |
+| [SUBMIT.md](SUBMIT.md) | You | Step-by-step Chrome Web Store submission (manual, ~15 min). |
 | [../../README.md](../../README.md) | Developers | GitHub. Already written. |
 
 **How they link:** product page → "How it works" → engineering write-up → GitHub repo. Don't copy text between them; link instead.
