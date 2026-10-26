@@ -70,7 +70,7 @@ Every reaction adjusts it to your taste, on your own computer. After a few dozen
 - If you add an AI key, only the text of posts the on-device check is **unsure** about is sent to the AI company you chose, nothing else, and never in "Local only" mode.
 - No account, no tracking, no ads, nothing sold. Your votes and settings stay in your browser, and you can export or erase them in one click.
 
-[Full privacy policy](privacy-policy.md)
+[Full privacy policy](../../PRIVACY.md)
 
 ## FAQ
 

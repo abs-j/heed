@@ -10,12 +10,15 @@ Everything is prepared. The dashboard can't be automated, so these ~15 minutes a
 | Small promo tile, 440×280 | `dist/store/heed-promo-440x280.png` |
 | Store icon, 128×128 | `icons/128.png` |
 | All listing text | `docs/launch/store-listing.md` |
-| Privacy policy text | `docs/launch/privacy-policy.md` |
+| Privacy policy | `PRIVACY.md` (its URL is in the next section) |
 
-## Before you start: two things only you can supply
-1. **Privacy policy URL.** The store requires one. Fill the `[date]` and `[email]` placeholders in `docs/launch/privacy-policy.md`, then publish it somewhere public. Easiest options:
-   - Make your GitHub repo public and use `https://github.com/abs-j/x-slop-detector/blob/main/docs/launch/privacy-policy.md` (rename the repo to `heed` first if you like; the URL changes with it), or
-   - Add a page on your site, e.g. `abhayjhade.com/heed/privacy`.
+## Before you start: two things only you can do
+1. **Publish the privacy policy (one-time, GitHub).** It's `PRIVACY.md` at the repo root; the contact line points to the repo's Issues page, so no personal email is published. Then, from the project folder:
+   1. On GitHub, open the repo's **Settings → General**, rename it from `x-slop-detector` to `heed`, and under **Danger Zone** change visibility to **Public**.
+   2. Point your local copy at the new name, then push:
+      - `git remote set-url origin https://github.com/abs-j/heed.git`
+      - `git push -u origin main`
+   3. Check that this opens when you're **signed out** (private window): **https://github.com/abs-j/heed/blob/main/PRIVACY.md** — this is your privacy policy URL.
 2. **Trademark check** for "Heed" (USPTO, IP Australia) if you haven't already.
 
 ## In the dashboard
@@ -30,7 +33,7 @@ Everything is prepared. The dashboard can't be automated, so these ~15 minutes a
    - Permission justifications: `storage`; content script on x.com / twitter.com; host permissions for `openrouter.ai`, `api.anthropic.com`, `api.openai.com`, `localhost`, `127.0.0.1`.
    - Remote code: **No**.
    - Data usage: tick **Website content** and **Authentication information** only (see the notes in `store-listing.md`); tick the three certifications only if they're true for you.
-   - Privacy policy URL: the one from above.
+   - Privacy policy URL: `https://github.com/abs-j/heed/blob/main/PRIVACY.md`
 4. **Distribution tab**: visibility **Unlisted** for the first submission (shareable link only), all regions.
    - If the dashboard asks whether you're a *trader* (EU consumer law): a free, non-commercial hobby project is usually "non-trader". Check the wording and decide yourself.
 5. **Submit for review.** Review typically takes days; it can take longer. After approval and a quick test by a couple of people, switch visibility to **Public**.

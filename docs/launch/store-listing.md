@@ -74,7 +74,7 @@ It doesn't change what X shows you, only what takes your attention on your scree
 
 **Certifications:** I do not sell or transfer user data to third parties outside the approved use cases; I do not use or transfer user data for purposes unrelated to the extension's single purpose; I do not use or transfer user data to determine creditworthiness or for lending.
 
-**Privacy policy URL:** `https://abhayjhade.com/slop-detector/privacy` (publish [privacy-policy.md](privacy-policy.md) there)
+**Privacy policy URL:** `https://github.com/abs-j/heed/blob/main/PRIVACY.md` (the repo must be public; see [SUBMIT.md](SUBMIT.md))
 
 ## Distribution tab
 - Visibility: **Unlisted** for the first submission (share by link), then **Public** once it has been approved and tried by a few people.
