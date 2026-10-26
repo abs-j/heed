@@ -232,7 +232,7 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
     const rows = h("dl", "rows");
     for (const [k, val] of v.details) { const r = h("div", "row"); r.append(h("dt", undefined, k), h("dd", undefined, val)); rows.append(r); }
     why.append(rows);
-    const foot = h("div", "foot"); foot.append("Shortcuts ", h("kbd", undefined, "⌥S"), " slop ", h("kbd", undefined, "⌥N"), " not slop ", h("kbd", undefined, "⌥U"), " undo ", h("kbd", undefined, "⌥P"), " peek");
+    const foot = h("div", "foot"); foot.append("Shortcuts ", h("kbd", undefined, "⌥L"), " 👍 ", h("kbd", undefined, "⌥D"), " 👎 ", h("kbd", undefined, "⌥U"), " undo ", h("kbd", undefined, "⌥P"), " peek");
     why.append(foot);
     wrap.append(why);
   }

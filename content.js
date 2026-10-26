@@ -222,7 +222,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       }
       why.append(rows);
       const foot = h("div", "foot");
-      foot.append("Shortcuts ", h("kbd", void 0, "\u2325S"), " slop ", h("kbd", void 0, "\u2325N"), " not slop ", h("kbd", void 0, "\u2325U"), " undo ", h("kbd", void 0, "\u2325P"), " peek");
+      foot.append("Shortcuts ", h("kbd", void 0, "\u2325L"), " \u{1F44D} ", h("kbd", void 0, "\u2325D"), " \u{1F44E} ", h("kbd", void 0, "\u2325U"), " undo ", h("kbd", void 0, "\u2325P"), " peek");
       why.append(foot);
       wrap.append(why);
     }

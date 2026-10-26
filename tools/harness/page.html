@@ -4,10 +4,12 @@
 const day = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
 const store = {
   enabled: true, mode: "blur", sensitivity: 60, provider: "anthropic", providerKeys: { anthropic: "x" }, tierMode: "tiered",
-  sdStats: { days: { [day(0)]: { scanned: 212, filtered: 31, tier0: 118, local: 4, spend: .01 }, [day(1)]: { scanned: 340, filtered: 52, tier0: 190, local: 0, spend: .02 }, [day(3)]: { scanned: 120, filtered: 9, tier0: 60, spend: 0 }, [day(4)]: { scanned: 300, filtered: 60, tier0: 150 }, [day(6)]: { scanned: 90, filtered: 14, tier0: 40 } } },
+  sdStats: { days: { [day(0)]: { scanned: 212, filtered: 31, tier0: 118, local: 4, spend: .01, savedSec: 1380 }, [day(1)]: { scanned: 340, filtered: 52, tier0: 190, local: 0, spend: .02 }, [day(3)]: { scanned: 120, filtered: 9, tier0: 60, spend: 0 }, [day(4)]: { scanned: 300, filtered: 60, tier0: 150 }, [day(6)]: { scanned: 90, filtered: 14, tier0: 40 } } },
   sdRecent: Array.from({ length: 200 }, (_, i) => Math.min(100, Math.max(0, Math.round(i % 5 === 0 ? 85 + (i % 13) : 5 + (i * 37) % 55)))),
   _unused: [{ key: "a", text: "Here's the thing nobody talks about — success is consistency.", label: "slop", handle: "growthguru", ts: Date.now(), score: 91 }, { key: "b", text: "Shipped the fix for the race condition today.", label: "not_slop", handle: "alex_dev", ts: Date.now(), score: 12 }],
   sdVotes: Array.from({length:16},(_, i)=>({key:'k'+i,text:(i%2?'Token presale airdrop whitelist snapshot launch ':'Walked the dog in the rain and fixed the flaky CI test ')+i,label:i%2?'slop':'not_slop',ts:Date.now(),score:i%2?40:10})),
+  sdTaste: [...['Spurs 82 Mavericks 80 in the playoffs, Wembanyama has 31','Lakers win the NBA game in overtime, season record now 12-3','NFL touchdown in the final minute of the playoffs'].map((t,i)=>({key:'s'+i,text:t,label:'less',ts:Date.now()-i*864e5})), ...['BREAKING: officials confirmed the wildfire, police said evacuations began','Authorities reported the earthquake, according to a statement released today'].map((t,i)=>({key:'n'+i,text:t,label:'more',ts:Date.now()-i*864e5}))],
+  topicManual: { tech: 'more' },
   sdFiltered: [{ key: "c", text: "Hey @grok pick 10 companies that won't exist in 2050.", score: 92, handle: "groktroll", explanation: "@grok prompt-bait", ts: Date.now() }],
   sdCreators: { growthguru: "mute" }, customRules: ["crypto shilling"]
 };

@@ -1,0 +1,103 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Heed store screenshot</title>
+<link rel="stylesheet" href="../../content.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1280px; height: 800px; overflow: hidden; background: #0b0c0e; color: #ececec;
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .shot { display: grid; grid-template-columns: 470px 1fr; height: 800px; background: radial-gradient(1200px 700px at 85% 10%, #1a1d29 0%, #0b0c0e 60%); }
+  .copy { padding: 84px 40px 40px 64px; display: flex; flex-direction: column; gap: 18px; }
+  .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 22px; letter-spacing: -.01em; }
+  .mark { display: inline-flex; align-items: flex-end; gap: 3px; height: 28px; }
+  .mark i { width: 7px; border-radius: 3px; background: #3dd68c; } .mark i:nth-child(1){height:11px} .mark i:nth-child(2){height:19px;background:#f0b429} .mark i:nth-child(3){height:28px;background:#ff6369}
+  h1 { font-size: 46px; line-height: 1.08; letter-spacing: -.03em; margin: 28px 0 0; font-weight: 750; }
+  .sub { font-size: 19px; color: #a3a7b0; line-height: 1.45; max-width: 360px; }
+  .stage { position: relative; display: grid; place-items: center; }
+  /* fake X column */
+  .col { width: 598px; height: 720px; overflow: hidden; background: #000; border: 1px solid #2f3336; border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+  .col .top { height: 48px; border-bottom: 1px solid #2f3336; display: flex; gap: 28px; align-items: center; padding: 0 20px; font-weight: 700; font-size: 15px; color: #71767b; }
+  .col .top b { color: #e7e9ea; border-bottom: 4px solid #1d9bf0; padding: 13px 0 11px; }
+  [data-testid="cellInnerDiv"] { border-bottom: 1px solid #2f3336; }
+  article { padding: 12px 16px; display: flex; gap: 12px; color: #e7e9ea; }
+  .av { width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; color: #fff; }
+  .nm { font-weight: 700; } .hd { color: #71767b; }
+  .acts { color: #71767b; margin-top: 10px; display: flex; gap: 40px; font-size: 13px; }
+  p { margin: 3px 0; }
+  .frame { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(0,0,0,.6); background: #17181b; transform-origin: center; }
+  .col a { color: #71767b; text-decoration: none; }
+  [data-testid="tweet"][data-hot] > sd-card { --dock-o: 1; }
+</style></head>
+<body>
+<div class="shot">
+  <section class="copy">
+    <div class="brand"><span class="mark"><i></i><i></i><i></i></span>Heed</div>
+    <h1 id="h"></h1><p class="sub" id="sub"></p>
+  </section>
+  <section class="stage" id="stage"></section>
+</div>
+<script>
+const SCENES = {
+  1: ["Slop, rage bait and topics you skip fold away", "Everything else stays. News and reasoned opinions are never folded just for being angry."],
+  2: ["One tap teaches it", "Thumbs up or down on any post. It learns your taste, on your device."],
+  3: ["See exactly why", "Click any score for a plain-English explanation and the signals behind it."],
+  4: ["Your feed, your threshold", "Fold, hide or dim. Preview how much of your recent feed a setting would fold."],
+  5: ["Change your mind any time", "Heed learns which topics you want less of. Thumbs-up a hidden post and the topic comes back."],
+};
+const q = new URLSearchParams(location.search), s = q.get("s") || "1";
+document.getElementById("h").textContent = SCENES[s][0]; document.getElementById("sub").textContent = SCENES[s][1];
+const stage = document.getElementById("stage");
+
+if (s === "4" || s === "5") {
+  const f = document.createElement("iframe"); f.className = "frame";
+  if (s === "4") { f.src = "../harness/page.html?p=popup.html&t=" + Date.now(); f.style.width = "320px"; f.style.height = "520px"; f.style.transform = "scale(1.38)"; }
+  else { f.src = "../harness/page.html?p=options.html&t=" + Date.now() + "#filters"; f.style.width = "940px"; f.style.height = "845px"; f.style.transform = "scale(.84)"; f.style.transformOrigin = "0 0"; }
+  // Freeze animations so a still frame never catches a transition half-way, and tidy the settings view.
+  f.onload = () => setTimeout(() => {
+    const d = f.contentDocument;
+    const st = d.createElement("style"); st.textContent = "*{transition:none!important;animation:none!important}.savebar{display:none!important}";
+    d.head.append(st);
+    if (s === "5") { d.getElementById("topicsCard")?.scrollIntoView(); }
+  }, 400);
+  if (s === "5") { const w = document.createElement("div"); w.style.cssText = "width:790px;height:710px;overflow:hidden;border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.6)"; w.append(f); stage.append(w); }
+  else stage.append(f);
+} else {
+  const P = [
+    ["dana_whit", "Dana Whit", "#5b6cff", "The city council voted 5-2 last night to approve the new bus lane. Construction starts in March and closes two blocks for about six weeks.", { score: 9, rage: 6, expl: "Specific, personal voice (no slop signals)", topics: ["news"] }],
+    ["growthguru", "Growth Guru 🚀", "#e5484d", "Here's the thing nobody talks about — success isn't about talent, it's about consistency.\n\nLike and follow for more. 🧵👇 #mindset", { score: 94, rage: 8, expl: "Engagement farming (91% match) · stock hook phrase", hits: ["stock hook phrase", "engagement bait / call to action"] }],
+    ["hottakes_daily", "Hot Takes Daily", "#d9822b", "Gamers be like \"I'm a sigma\" and then lose to a bot in bronze. Delusional.", { score: 22, rage: 86, expl: "", rageHits: ["'X be like' mockery", "contempt and name-calling"], rageReason: "no facts, sources or specifics" }],
+    ["courtside_clips", "Courtside Clips", "#2f9e6b", "Spurs 82, Mavericks 80 with 4 minutes left in the third. Wembanyama has 31 points on 12-of-17 shooting.", { score: 12, rage: 4, expl: "Specific, personal voice (no slop signals)", topics: ["sports"], topic: { id: "sports", label: "Sports", less: true, more: false } }],
+    ["mia_runs", "Mia", "#8b5cf6", "Marathon training week 9: 42 miles, one blister, zero regrets. Long run on Sunday was the first time it actually felt easy.", { score: 8, rage: 3, expl: "Authentic", hot: s === "2" }],
+    ["alex_dev", "Alex Rivera", "#0ea5e9", "Shipped the fix for the race condition in our job scheduler today. Two workers were claiming the same row.", { score: 11, rage: 4, expl: "Specific, personal voice (no slop signals)" }],
+  ];
+  const col = document.createElement("div"); col.className = "col";
+  col.innerHTML = '<div class="top"><b>For you</b><span>Following</span></div>';
+  const feed = document.createElement("div"); col.append(feed); stage.append(col);
+  const RES = {};
+  P.forEach(([h, n, c, t, o], i) => {
+    const cell = document.createElement("div"); cell.setAttribute("data-testid", "cellInnerDiv");
+    cell.innerHTML = `<article data-testid="tweet"><div class="av" style="background:${c}">${n[0]}</div><div><div data-testid="User-Name"><span class="nm"></span> <a href="/${h}" class="hd">@${h}</a></div><div data-testid="tweetText"></div><div class="acts"><span>💬 12</span><span>🔁 4</span><span>♡ 88</span><span>📊 2.1K</span></div><a href="/${h}/status/${100 + i}"><time datetime="${new Date(Date.now() - 3600e3).toISOString()}">1h</time></a></div></article>`;
+    cell.querySelector(".nm").textContent = n; cell.querySelector("[data-testid=tweetText]").innerText = t;
+    const art = cell.querySelector("article");
+    if (o.hot) art.setAttribute("data-hot", "1");
+    if (s === "3" && h === "hottakes_daily") art.setAttribute("data-sd-why", "1");
+    feed.append(cell);
+    RES[t.slice(0, 20)] = o;
+  });
+  // On the "why" scene, drop the first rows so the popover has room.
+  if (s === "3") { feed.children[0].remove(); feed.children[0].remove(); }
+  const store = { enabled: true, mode: "blur", sensitivity: 60, rageMode: "fold", tasteMode: "fold", rageThreshold: 70 };
+  window.chrome = {
+    storage: { local: { get: async () => store, set: async () => {} }, onChanged: { addListener() {} } },
+    runtime: { getManifest: () => ({ version: "2.5.0" }), sendMessage: async (m) => {
+      if (m.type !== "analyze") return {};
+      const o = RES[m.text.slice(0, 20)] || { score: 10, rage: 5, expl: "" };
+      return { score: o.score, base: o.score, explanation: o.expl, key: "k" + o.score + m.text.length, pattern: o.score > 80 ? "engagement_farming" : "authentic",
+        acct: o.score > 80 ? "engagement_aggregator" : "personal_individual", acctConf: .9, adjOk: false,
+        rage: o.rage, rageSrc: o.rageReason ? "model" : "local", rageHits: o.rageHits || [], rageReason: o.rageReason, rageNews: 0, interest: 0,
+        topics: o.topics || [], topic: o.topic, why: { hits: o.hits || [], provider: "claude", acctConf: 90, examples: 3 } };
+    } }
+  };
+  for (const src of ["../../lib.js", "../../content.js"]) { const sc = document.createElement("script"); sc.src = src; sc.async = false; document.body.append(sc); }
+}
+</script>
+</body></html>
