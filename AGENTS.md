@@ -38,12 +38,11 @@ Visual checks without X: serve the repo root (`python3 -m http.server 8765`), op
 ## Status (v2.5.0)
 - Built: everything above; popup dashboard; settings app (General, Detection, Filters & creators incl. Topics, Review & votes, Insights, Data); export/import; launch kit in `docs/launch/`; `PRIVACY.md`.
 - Verified live on x.com up to 2.4.1 (dock, LESS fold, topic folding, live updates, undo). 2.5.0 (rename/hardening) is covered by tests and rendered screenshots but not re-tested on live X.
-- Not pushed yet. Remote is `abs-j/x-slop-detector` (private); plan: rename repo to `heed`, make public, push (see `docs/launch/SUBMIT.md`).
+- Pushed. Remote is public `abs-j/heed` (`origin` → `https://github.com/abs-j/heed.git`). Privacy policy loads signed-out at `https://github.com/abs-j/heed/blob/main/PRIVACY.md`.
 
 ## Next steps
-1. Publish `PRIVACY.md` (rename repo, make public, push) → URL `https://github.com/abs-j/heed/blob/main/PRIVACY.md`.
-2. Trademark search for "Heed" (USPTO, IP Australia).
-3. Submit to the Chrome Web Store (unlisted first) using `~/Desktop/Heed-store/PASTE-THESE.txt` and `docs/launch/SUBMIT.md`; then public + launch posts per `docs/launch/README.md`.
+1. Trademark search for "Heed" (USPTO, IP Australia) before or alongside the first submission.
+2. Submit to the Chrome Web Store (unlisted first) using `~/Desktop/Heed-store/PASTE-THESE.txt` and `docs/launch/SUBMIT.md`; then public + launch posts per `docs/launch/README.md`.
 4. Product: collect real reactions and measure agreement (Settings → Insights); LLM-assisted topic tags for uncertain posts; "highlight what I like"/digest; spend tracking for non-Jev providers; Firefox build.
 
 ## Conventions
