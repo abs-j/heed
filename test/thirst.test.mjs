@@ -74,3 +74,10 @@ test("Instagram: hashtags and emoji are how people write there, so ordinary capt
   // The real slop signals still apply.
   assert.ok(SD.localScore("Link in bio! New drop 🔥 #ad", undefined, "instagram").score >= 70);
 });
+
+test("router: with the picture option on, a harmless caption doesn't stop an image post reaching the model", () => {
+  const o = { mode: "tiered", low: 20, high: 90, llmReady: true };
+  assert.equal(SD.router.route(5, { ...o, thirst: { on: true, score: 9, vision: true } }).use, "llm");
+  assert.equal(SD.router.route(5, { ...o, thirst: { on: true, score: 9, vision: false } }).use, "local");
+  assert.equal(SD.router.route(5, { ...o, thirst: { on: true, score: 95, vision: true } }).use, "local");
+});

@@ -717,6 +717,7 @@ async function getTier() {
   const D = SD.router.TIER_DEFAULTS;
   return { mode: ["local", "tiered", "llm"].includes(s.tierMode) ? s.tierMode : D.mode, low: s.tierLow ?? D.low, high: s.tierHigh ?? D.high };
 }
+const isLocalUrl = (u) => SD.providers.isLocalUrl(u);
 const providerReady = (cfg) => cfg.provider === "jev" ? !!cfg.apiKey : SD.providers.providerReady(cfg);
 const providerName = (cfg) => SD.providers.PROVIDER_DEFAULTS[cfg.provider].label;
 
@@ -800,6 +801,13 @@ async function runJob({ key, text, ctx, resolve, reject }) {
   }
 }
 
+// True when the reader lets the model see pictures and this post has one the provider can fetch.
+async function visionFor(ctx) {
+  if (!ctx?.images?.length || ctx.localOnly) return false;
+  const [ts, cfg] = await Promise.all([getThirstSettings(), getProviderConfig()]);
+  return ts.mode !== "off" && ts.vision && cfg.provider !== "jev" && !isLocalUrl(cfg.baseUrl);
+}
+
 async function analyzeInner({ text, ctx, refine }) {
   await Promise.all([loadCache(), loadModel()]);
   const norm = text.trim().toLowerCase();
@@ -818,7 +826,8 @@ async function analyzeInner({ text, ctx, refine }) {
   if (creator) return { ...creator, key };
   // Short posts are scored on-device only: too little text for the AI model to add much,
   // and it keeps every post markable by hand at no cost.
-  if ((text.trim().length < SHORT_POST || ctx?.localOnly) && !hit) {
+  const vision = await visionFor(ctx);
+  if ((text.trim().length < SHORT_POST && !vision || ctx?.localOnly) && !hit) {
     if (!refine) bumpStat("tier0");
     return localConfident(text, key, "local-only", ctx?.platform);
   }
@@ -840,7 +849,7 @@ async function analyzeInner({ text, ctx, refine }) {
   const rageScore = SD.rage.localRage(text, { ageHours: ageHours(ctx?.postedAt) }, rageModel || undefined).score;
   const ts = await getThirstSettings();
   const thirstScore = SD.thirst.localThirst(text, ctx?.alt || "", thirstModel || undefined).score;
-  const rt = SD.router.route(local(text, ctx?.platform).score, { ...tier, llmReady: ready, rage: { on: rs.mode !== "off", score: rageScore }, thirst: { on: ts.mode !== "off", score: thirstScore } });
+  const rt = SD.router.route(local(text, ctx?.platform).score, { ...tier, llmReady: ready, rage: { on: rs.mode !== "off", score: rageScore }, thirst: { on: ts.mode !== "off", score: thirstScore, vision } });
   if (rt.use === "local") {
     if (refine && keepHit) return present(keepHit, key);
     if (!refine) bumpStat("tier0");

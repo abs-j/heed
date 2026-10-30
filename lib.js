@@ -593,7 +593,7 @@ ${JSON.stringify(state)}${filters}`;
     if (o.mode === "local") return { use: "local", reason: "local-only" };
     if (o.mode === "tiered") {
       const rageSure = !o.rage?.on || o.rage.score <= RAGE_SURE.low || o.rage.score >= RAGE_SURE.high;
-      const thirstSure = !o.thirst?.on || o.thirst.score <= RAGE_SURE.low || o.thirst.score >= RAGE_SURE.high;
+      const thirstSure = !o.thirst?.on || o.thirst.score <= RAGE_SURE.low && !o.thirst.vision || o.thirst.score >= RAGE_SURE.high;
       if (rageSure && thirstSure && localScore2 <= o.low) return { use: "local", reason: "confident-ok" };
       if (localScore2 >= o.high) return { use: "local", reason: "confident-slop" };
     }

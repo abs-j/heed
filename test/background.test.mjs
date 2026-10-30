@@ -192,3 +192,17 @@ test("Instagram: grid thumbnails (localOnly) and platform captions are scored wi
   const c = await boot({}, ok({}))({ type: "analyze", text: "Golden hour ✨ #photography #sunset #travel #nature", ctx: { platform: "instagram", postId: "ig_cap" } });
   assert.ok(c.score < 40, `caption slop ${c.score}`);
 });
+
+test("thirst vision: a harmless caption on an image post still goes to the model in tiered mode", async () => {
+  const img = ["https://scontent.cdninstagram.com/a.jpg"];
+  const run = async (store) => {
+    calls.length = 0;
+    const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" }, ...store }, reply({ thirst: 80, thirst_reason: "posed photo" }));
+    const r = await send({ type: "analyze", text: "Sunday ✨", ctx: { platform: "instagram", postId: "ig_v" + JSON.stringify(store), images: img } });
+    return { r, n: calls.length };
+  };
+  const off = await run({});
+  assert.equal(off.n, 0);
+  const on = await run({ thirstVision: true });
+  assert.equal(on.n, 1); assert.equal(on.r.thirst, 80);
+});

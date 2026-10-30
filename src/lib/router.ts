@@ -5,7 +5,9 @@ export interface TierOptions {
   // When the rage-bait filter is on, a post is only settled locally if the rage scorer is sure too.
   rage?: { on: boolean; score: number };
   // Same for thirst traps.
-  thirst?: { on: boolean; score: number };
+  // `vision`: the reader lets the model look at the post's picture, so a harmless-looking caption
+  // is no reason to skip it (the caption says nothing about what the photo shows).
+  thirst?: { on: boolean; score: number; vision?: boolean };
 }
 export const RAGE_SURE = { low: 25, high: 85 };
 export const TIER_DEFAULTS = { mode: "tiered" as TierMode, low: 20, high: 90 };
@@ -17,7 +19,7 @@ export function route(localScore: number, o: TierOptions): Route {
   if (o.mode === "local") return { use: "local", reason: "local-only" };
   if (o.mode === "tiered") {
     const rageSure = !o.rage?.on || o.rage.score <= RAGE_SURE.low || o.rage.score >= RAGE_SURE.high;
-    const thirstSure = !o.thirst?.on || o.thirst.score <= RAGE_SURE.low || o.thirst.score >= RAGE_SURE.high;
+    const thirstSure = !o.thirst?.on || (o.thirst.score <= RAGE_SURE.low && !o.thirst.vision) || o.thirst.score >= RAGE_SURE.high;
     if (rageSure && thirstSure && localScore <= o.low) return { use: "local", reason: "confident-ok" };
     if (localScore >= o.high) return { use: "local", reason: "confident-slop" };
   }
