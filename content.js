@@ -561,7 +561,6 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     }
     function hold(article) {
       if (!site.holdUntilChecked || article.hasAttribute("data-sd") || article.hasAttribute("data-sd-pending")) return;
-      if (article.getBoundingClientRect().top < innerHeight) return;
       article.setAttribute("data-sd-pending", "");
       setTimeout(() => article.removeAttribute("data-sd-pending"), PENDING_MAX_MS);
     }

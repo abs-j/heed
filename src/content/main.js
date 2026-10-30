@@ -144,10 +144,9 @@ import { siteFor } from "./sites";
   }
 
   // Hold a post that will be checked from the moment it appears, so it never shows unfolded for
-  // the instant before its check starts. Never hides something already on screen.
+  // the instant before its check starts, including one that mounts already on screen.
   function hold(article) {
     if (!site.holdUntilChecked || article.hasAttribute("data-sd") || article.hasAttribute("data-sd-pending")) return;
-    if (article.getBoundingClientRect().top < innerHeight) return;
     article.setAttribute("data-sd-pending", "");
     setTimeout(() => article.removeAttribute("data-sd-pending"), PENDING_MAX_MS);
   }
