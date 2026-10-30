@@ -196,9 +196,10 @@ import { siteFor } from "./sites";
     r.score = scoreOf(r);
     results.set(article, r);
     article.removeAttribute("data-sd-pending");
-    // A fold above the viewport shifts everything below it. During a fast scroll that is what makes
-    // the page shake, so folds of posts the reader has already passed wait for the scroll to settle.
-    if (site.holdUntilChecked && Date.now() - lastScroll < SCROLL_IDLE_MS && article.getBoundingClientRect().top < 0) {
+    // A fold on screen or above it moves everything below it up, and the browser shifts the scroll
+    // position to compensate. Mid-scroll that is what makes the feed jump, so only posts still
+    // below the screen fold during a scroll; the rest wait until it has settled.
+    if (site.holdUntilChecked && Date.now() - lastScroll < SCROLL_IDLE_MS && article.getBoundingClientRect().top < innerHeight) {
       deferred.add(article);
       clearTimeout(flushTimer);
       flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS);
@@ -429,9 +430,9 @@ import { siteFor } from "./sites";
 
   function collapse(article, r, { wasCollapsed, wasOpen, fullHeight }) {
     // Start the transition from the post's current height so it glides shut.
-    // Never on Instagram: its posts arrive blurred from the hold, and a gliding height change
-    // while the reader scrolls moves the page under them.
-    const animate = !site.holdUntilChecked && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
+    // Not mid-scroll (a gliding height change under a moving page is what jumps); on Instagram folds
+    // are held back until the scroll settles, so a post on screen then closes smoothly.
+    const animate = Date.now() - lastScroll > 220 && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
     if (animate) article.style.maxHeight = fullHeight + "px";
     article.setAttribute("data-sd-fold", "");
     mount(article, r, { strip: true, folded: foldThread(article) });

@@ -607,7 +607,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       r.score = scoreOf(r);
       results.set(article, r);
       article.removeAttribute("data-sd-pending");
-      if (site.holdUntilChecked && Date.now() - lastScroll < SCROLL_IDLE_MS && article.getBoundingClientRect().top < 0) {
+      if (site.holdUntilChecked && Date.now() - lastScroll < SCROLL_IDLE_MS && article.getBoundingClientRect().top < innerHeight) {
         deferred.add(article);
         clearTimeout(flushTimer);
         flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS);
@@ -856,7 +856,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       lastScroll = Date.now();
     }, { passive: true, capture: true });
     function collapse(article, r, { wasCollapsed, wasOpen, fullHeight }) {
-      const animate = !site.holdUntilChecked && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
+      const animate = Date.now() - lastScroll > 220 && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
       if (animate) article.style.maxHeight = fullHeight + "px";
       article.setAttribute("data-sd-fold", "");
       mount(article, r, { strip: true, folded: foldThread(article) });
