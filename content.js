@@ -613,7 +613,40 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS);
         return;
       }
-      render(article);
+      if (site.holdUntilChecked && article.getBoundingClientRect().top < innerHeight) stable(() => render(article));
+      else render(article);
+    }
+    let stableDepth = 0;
+    function stable(fn) {
+      if (stableDepth) {
+        fn();
+        return;
+      }
+      let ref = null, best = 0;
+      for (const a of document.querySelectorAll(site.postSelector)) {
+        const r = a.getBoundingClientRect();
+        const visible = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+        if (visible > best && !a.hasAttribute("data-sd-pending")) {
+          best = visible;
+          ref = a;
+        }
+      }
+      const before = ref ? ref.getBoundingClientRect().top : 0;
+      const html = document.documentElement, body = document.body;
+      html.style.overflowAnchor = "none";
+      body.style.overflowAnchor = "none";
+      stableDepth++;
+      try {
+        fn();
+      } finally {
+        stableDepth--;
+      }
+      if (ref && ref.isConnected) {
+        const delta = ref.getBoundingClientRect().top - before;
+        if (Math.abs(delta) > 0.5) scrollBy({ top: delta, behavior: "instant" });
+      }
+      html.style.overflowAnchor = "";
+      body.style.overflowAnchor = "";
     }
     const SCROLL_IDLE_MS = 220;
     const deferred = /* @__PURE__ */ new Set();
@@ -625,7 +658,9 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       }
       const batch = [...deferred];
       deferred.clear();
-      for (const a of batch) if (a.isConnected && results.has(a)) render(a);
+      stable(() => {
+        for (const a of batch) if (a.isConnected && results.has(a)) render(a);
+      });
     }
     async function ask(text, ctx, refine) {
       try {
@@ -856,7 +891,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       lastScroll = Date.now();
     }, { passive: true, capture: true });
     function collapse(article, r, { wasCollapsed, wasOpen, fullHeight }) {
-      const animate = Date.now() - lastScroll > 220 && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
+      const animate = !stableDepth && Date.now() - lastScroll > 220 && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
       if (animate) article.style.maxHeight = fullHeight + "px";
       article.setAttribute("data-sd-fold", "");
       mount(article, r, { strip: true, folded: foldThread(article) });

@@ -205,7 +205,33 @@ import { siteFor } from "./sites";
       flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS);
       return;
     }
-    render(article);
+    if (site.holdUntilChecked && article.getBoundingClientRect().top < innerHeight) stable(() => render(article));
+    else render(article);
+  }
+
+  // Run a change that can resize posts on or above the screen and keep the post the reader is
+  // watching exactly where it was. Chrome's own scroll anchoring cannot be trusted on Instagram's
+  // virtualised feed (the watched video visibly slid), so it is switched off for the change and the
+  // scroll position is corrected by hand.
+  let stableDepth = 0;
+  function stable(fn) {
+    if (stableDepth) { fn(); return; }
+    let ref = null, best = 0;
+    for (const a of document.querySelectorAll(site.postSelector)) {
+      const r = a.getBoundingClientRect();
+      const visible = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+      if (visible > best && !a.hasAttribute("data-sd-pending")) { best = visible; ref = a; }
+    }
+    const before = ref ? ref.getBoundingClientRect().top : 0;
+    const html = document.documentElement, body = document.body;
+    html.style.overflowAnchor = "none"; body.style.overflowAnchor = "none";
+    stableDepth++;
+    try { fn(); } finally { stableDepth--; }
+    if (ref && ref.isConnected) {
+      const delta = ref.getBoundingClientRect().top - before;
+      if (Math.abs(delta) > 0.5) scrollBy({ top: delta, behavior: "instant" });
+    }
+    html.style.overflowAnchor = ""; body.style.overflowAnchor = "";
   }
 
   const SCROLL_IDLE_MS = 220;
@@ -215,7 +241,7 @@ import { siteFor } from "./sites";
     if (Date.now() - lastScroll < SCROLL_IDLE_MS) { flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS); return; }
     const batch = [...deferred];
     deferred.clear();
-    for (const a of batch) if (a.isConnected && results.has(a)) render(a);
+    stable(() => { for (const a of batch) if (a.isConnected && results.has(a)) render(a); });
   }
 
   async function ask(text, ctx, refine) {
@@ -432,7 +458,7 @@ import { siteFor } from "./sites";
     // Start the transition from the post's current height so it glides shut.
     // Not mid-scroll (a gliding height change under a moving page is what jumps); on Instagram folds
     // are held back until the scroll settles, so a post on screen then closes smoothly.
-    const animate = Date.now() - lastScroll > 220 && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
+    const animate = !stableDepth && Date.now() - lastScroll > 220 && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
     if (animate) article.style.maxHeight = fullHeight + "px";
     article.setAttribute("data-sd-fold", "");
     mount(article, r, { strip: true, folded: foldThread(article) });
