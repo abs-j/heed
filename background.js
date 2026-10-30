@@ -600,11 +600,11 @@ async function callJev(text, ctx, apiKey) {
       },
       thirst: {
         type: "score",
-        instructions: "How much is this post a THIRST TRAP? A thirst trap exists to be looked at: suggestive posing or dress paired with bait (a 'rate me' ask, a teasing one-liner, an emoji-only caption, fishing for compliments or DMs). It is NOT a thirst trap merely because it shows skin or a body: fitness instruction, sport, medical or awareness posts, fashion and product posts with real information, travel and family beach photos, and ordinary selfies must score low. Judge from the caption, hashtags and attached_media (including the platform's own image description); do not invent what you cannot see. If reader_thirst_examples are present, calibrate to the reader's taste.",
+        instructions: "How much is this post a THIRST TRAP? A thirst trap exists to be looked at: suggestive posing or dress paired with bait (a 'rate me' ask, a teasing one-liner, an emoji-only caption, fishing for compliments or DMs). It is NOT a thirst trap merely because it shows skin or a body: fitness instruction, sport, medical or awareness posts, fashion and product posts with real information, travel and family beach photos, and ordinary selfies must score low. Judge from the caption, hashtags and attached_media (including the platform's own image description): a posed, body-focused or revealing photo with an empty caption counts even without a bait ask. Do not invent what you cannot see. If reader_thirst_examples are present, calibrate to the reader's taste.",
         criteria: [
           "0-10: Not a thirst trap. Ordinary, informational, sporting, family, travel or professional content",
           "11-30: Shows a body or swimwear incidentally, with real context or information",
-          "31-69: Mixed. Flattering or suggestive framing with some context, or ambiguous intent",
+          "31-69: Mixed. Flattering or suggestive framing with some context, or a posed, body-focused or revealing photo of a person whose caption adds nothing, with no bait ask",
           "70-89: Mostly a thirst trap. Suggestive posing with a bait caption and little else",
           "90-100: Pure thirst trap. Exists only to be looked at: rate-me asks, teasing captions, solicitations"
         ]

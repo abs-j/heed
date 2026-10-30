@@ -37,7 +37,7 @@ Visual checks without X: serve the repo root (`python3 -m http.server 8765`), op
 - When testing on the user's real X account in a browser, undo any reactions you make.
 - The Chrome Web Store dashboard cannot be automated (extension tools, computer use and the in-app browser are all blocked); submission is manual.
 
-## Status (v2.6.0)
+## Status (v2.6.1)
 - Built: everything above; popup dashboard; settings app (General, Detection, Filters & creators incl. Topics, Review & votes, Insights, Data); export/import; launch kit in `docs/launch/`; `PRIVACY.md`.
 - 2.6.0 adds thirst traps (X + Instagram) and the Instagram adapter. **Not tested on live Instagram** (selectors written from public markup; only the offline harness `tools/harness/instagram.mjs` and unit tests ran). Needs a real-feed pass and a store-listing/privacy update for the new host before submission.
 - Verified live on x.com up to 2.4.1 (dock, LESS fold, topic folding, live updates, undo). 2.5.0 (rename/hardening) is covered by tests and rendered screenshots but not re-tested on live X.
