@@ -447,7 +447,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
           request(e.target);
         }
       }
-    }, { rootMargin: "1200px" });
+    }, { rootMargin: "2600px" });
     const { textOf, handleOf, contextOf } = site;
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const profMem = /* @__PURE__ */ new Map();

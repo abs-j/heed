@@ -32,7 +32,7 @@ import { siteFor } from "./sites";
     for (const e of entries) {
       if (e.isIntersecting) { io.unobserve(e.target); request(e.target); }
     }
-  }, { rootMargin: "1200px" });   // start scoring a screen or two ahead so folds are ready on arrival
+  }, { rootMargin: "2600px" });   // start scoring about three screens ahead so folds are ready on arrival
 
   // Post markup is site-specific; see sites.js.
   const { textOf, handleOf, contextOf } = site;
