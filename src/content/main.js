@@ -191,8 +191,22 @@ import { siteFor } from "./sites";
   const scoreOf = (r) => (typeof r.base === "number" && !r.fb && !r.local && !r.creator
     ? SD.finalScore(r.base, r.acct, r.acctConf, r.adjOk, settings.acctInfluence)
     : r.score);
+  // Instagram throws an article away when it scrolls far off screen and builds a new one when it
+  // comes back, full height and unfolded. Verdicts are kept by post id so that new element can be
+  // folded the instant it appears (see fastPath), before it is ever painted.
+  const byPost = new Map();
+  const BY_POST_MAX = 600;
+  function remember(article, r) {
+    const id = site.holdUntilChecked && contextOf(article).postId;
+    if (!id) return;
+    byPost.delete(id);
+    byPost.set(id, r);
+    if (byPost.size > BY_POST_MAX) byPost.delete(byPost.keys().next().value);
+  }
+
   function accept(article, r, text) {
     r.text = text;
+    remember(article, r);
     r.score = scoreOf(r);
     results.set(article, r);
     article.removeAttribute("data-sd-pending");
@@ -232,6 +246,30 @@ import { siteFor } from "./sites";
       if (Math.abs(delta) > 0.5) scrollBy({ top: delta, behavior: "instant" });
     }
     html.style.overflowAnchor = ""; body.style.overflowAnchor = "";
+  }
+
+  // Runs in the observer callback itself, which is delivered before the browser paints: a post that
+  // comes back already judged is folded at once, and a new one is held (faded) straight away, so
+  // neither is ever seen full height.
+  function fastPath(records) {
+    const fresh = [];
+    for (const rec of records) {
+      for (const n of rec.addedNodes) {
+        if (n.nodeType !== 1) continue;
+        if (n.matches?.(site.postSelector)) fresh.push(n);
+        else if (n.querySelector) fresh.push(...n.querySelectorAll(site.postSelector));
+      }
+    }
+    for (const a of fresh) {
+      if (seen.has(a) || a.hasAttribute("data-sd") || !site.hasContent(a)) continue;
+      const c = contextOf(a);
+      if (c.followed && settings.igShowFollowed) continue;
+      const known = c.postId && byPost.get(c.postId);
+      if (known) {
+        seen.add(a);
+        stable(() => { known.score = scoreOf(known); results.set(a, known); render(a); });
+      } else hold(a);
+    }
   }
 
   const SCROLL_IDLE_MS = 220;
@@ -732,7 +770,8 @@ import { siteFor } from "./sites";
     let t;
     // Theme is re-read at most every few seconds: reading computed style forces a style recalc.
     let themeAt = 0;
-    new MutationObserver(() => {
+    new MutationObserver((records) => {
+      if (site.holdUntilChecked && settings.enabled) fastPath(records);
       clearTimeout(t);
       t = setTimeout(() => {
         if (Date.now() - themeAt > 3000) { themeAt = Date.now(); applyTheme(); }

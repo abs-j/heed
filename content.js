@@ -602,8 +602,18 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       }
     }
     const scoreOf = (r) => typeof r.base === "number" && !r.fb && !r.local && !r.creator ? SD.finalScore(r.base, r.acct, r.acctConf, r.adjOk, settings.acctInfluence) : r.score;
+    const byPost = /* @__PURE__ */ new Map();
+    const BY_POST_MAX = 600;
+    function remember(article, r) {
+      const id = site.holdUntilChecked && contextOf(article).postId;
+      if (!id) return;
+      byPost.delete(id);
+      byPost.set(id, r);
+      if (byPost.size > BY_POST_MAX) byPost.delete(byPost.keys().next().value);
+    }
     function accept(article, r, text) {
       r.text = text;
+      remember(article, r);
       r.score = scoreOf(r);
       results.set(article, r);
       article.removeAttribute("data-sd-pending");
@@ -647,6 +657,30 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       }
       html.style.overflowAnchor = "";
       body.style.overflowAnchor = "";
+    }
+    function fastPath(records) {
+      const fresh = [];
+      for (const rec of records) {
+        for (const n of rec.addedNodes) {
+          if (n.nodeType !== 1) continue;
+          if (n.matches?.(site.postSelector)) fresh.push(n);
+          else if (n.querySelector) fresh.push(...n.querySelectorAll(site.postSelector));
+        }
+      }
+      for (const a of fresh) {
+        if (seen.has(a) || a.hasAttribute("data-sd") || !site.hasContent(a)) continue;
+        const c = contextOf(a);
+        if (c.followed && settings.igShowFollowed) continue;
+        const known = c.postId && byPost.get(c.postId);
+        if (known) {
+          seen.add(a);
+          stable(() => {
+            known.score = scoreOf(known);
+            results.set(a, known);
+            render(a);
+          });
+        } else hold(a);
+      }
     }
     const SCROLL_IDLE_MS = 220;
     const deferred = /* @__PURE__ */ new Set();
@@ -1197,7 +1231,8 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       scan();
       let t;
       let themeAt = 0;
-      new MutationObserver(() => {
+      new MutationObserver((records) => {
+        if (site.holdUntilChecked && settings.enabled) fastPath(records);
         clearTimeout(t);
         t = setTimeout(() => {
           if (Date.now() - themeAt > 3e3) {
