@@ -17,7 +17,7 @@ await page.route("https://www.instagram.com/**", (route) => {
 page.on("pageerror", (e) => console.log("pageerror:", e.message));
 await page.goto(`https://www.instagram.com/?thirst=${process.argv[3] || "fold"}`);
 await page.waitForTimeout(1500);
-const rows = await page.$$eval("article", (as) => as.map((a) => ({ user: a.querySelector("header a")?.textContent, sd: a.dataset.sd || null, folded: a.hasAttribute("data-sd-fold"), hidden: getComputedStyle(a).display === "none", h: Math.round(a.getBoundingClientRect().height) })));
+const rows = await page.$$eval("article", (as) => as.map((a) => ({ user: a.querySelector("a[href]")?.textContent, sd: a.dataset.sd || null, folded: a.hasAttribute("data-sd-fold"), hidden: getComputedStyle(a).display === "none", h: Math.round(a.getBoundingClientRect().height) })));
 console.log(JSON.stringify(rows, null, 1));
 await page.screenshot({ path: process.argv[2] || "instagram-harness.png" });
 await browser.close();

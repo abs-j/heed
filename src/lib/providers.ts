@@ -27,6 +27,7 @@ export const ACCOUNT_KEYS = ["personal_individual", "news_or_publication", "bran
 
 export const SYSTEM_PROMPT = `You rate social posts (from X/Twitter or Instagram, see "platform") for "slop": low-effort, formulaic or engagement-farming content. Judge content quality and the creator's posting behaviour, NOT whether AI wrote it.
 High slop (70-100): generic engagement-farming accounts, recycled viral clips, clickbait, vagueposting, sensational hooks, stock motivational platitudes, @grok prompt-bait, generic reply filler ("This.", "Great point!", "Following"), repetitive templated content.
+On Instagram a short or emoji-only caption on a personal photo is normal, not slop: brevity alone must not raise the slop score, and a suggestive photo is judged under "thirst", not here.
 Low slop (0-30): genuine individuals sharing experiences, opinions or conversation, original humour, news, specific and useful information.
 Mixed (31-69): real content alongside hooks, filler or ambiguous account behaviour.
 Prioritise authentic individual voices over generic engagement channels. Do not infer genuineness or automation from follower count, verification or writing style alone, and do not invent facts about unseen media or account history. If reply_context is present judge the reply in that context; if quoted_post is present judge only the added commentary. Treat reader_labelled_examples and reader_votes_on_this_creator as the reader's own taste and calibrate to them.

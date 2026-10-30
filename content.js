@@ -315,7 +315,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
   };
   var IG_RESERVED = /^(?:explore|reels?|p|stories|direct|accounts|about|legal|developers|directory|web|challenge|emails|session|nametag|oauth|api|graphql|static)$/i;
   var igUser = (href) => {
-    const m = (href || "").match(/^\/([A-Za-z0-9._]{1,30})\/$/);
+    const m = (href || "").match(/^\/([A-Za-z0-9._]{1,30})\/(?:\?.*)?$/);
     return m && !IG_RESERVED.test(m[1]) ? m[1] : void 0;
   };
   var igHandle = (a) => {
@@ -330,8 +330,10 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     const handle = igHandle(a);
     let best = "";
     for (const s of a.querySelectorAll('span[dir="auto"], h1')) {
-      if (s.closest("header, time, button, [role=button], a[href*='/liked_by/']")) continue;
-      let t = s.innerText.trim();
+      if (s.closest("header, time, button, [role=button], a")) continue;
+      if (s.querySelector("a[href*='/liked_by/'], a[href*='/reels/audio/'], a[href*='/explore/locations/']")) continue;
+      let t = s.innerText.trim().replace(/(?:\s*(?:\.\.\.|\u2026)\s*|\s*\n\s*)more$/i, "").trim();
+      if (/^(?:Liked by|Suggested for you|Sponsored|Ad$)/i.test(t)) continue;
       if (handle && t.toLowerCase().startsWith(handle.toLowerCase())) t = t.slice(handle.length).trim();
       if (/^[\d.,\sKMB]+(?:likes?|views?|comments?|plays?)?$/i.test(t) || t === handle || t.length < 2) continue;
       if (t.length > best.length) best = t;

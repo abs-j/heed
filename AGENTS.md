@@ -37,9 +37,10 @@ Visual checks without X: serve the repo root (`python3 -m http.server 8765`), op
 - When testing on the user's real X account in a browser, undo any reactions you make.
 - The Chrome Web Store dashboard cannot be automated (extension tools, computer use and the in-app browser are all blocked); submission is manual.
 
-## Status (v2.6.2)
+## Status (v2.6.4)
 - Built: everything above; popup dashboard; settings app (General, Detection, Filters & creators incl. Topics, Review & votes, Insights, Data); export/import; launch kit in `docs/launch/`; `PRIVACY.md`.
-- 2.6.0 adds thirst traps (X + Instagram) and the Instagram adapter. **Not tested on live Instagram** (selectors written from public markup; only the offline harness `tools/harness/instagram.mjs` and unit tests ran). Needs a real-feed pass and a store-listing/privacy update for the new host before submission.
+- 2.6.0 added thirst traps (X + Instagram) and the Instagram adapter. Live-verified on a real logged-in Instagram home feed at 2.6.2/2.6.3: adapter runs, THIRST/SLOP folds render correctly in the article, Peek opens and closes, Explore and Reels are left alone. Real markup differs from the public markup: articles have **no `<header>`**, ad profile links carry `?hl=…`, and "Liked by", location and audio lines are `span[dir=auto]` too (fixed in 2.6.3). Most home-feed posts are videos with `blob:` sources and no poster, so the picture option sees nothing for them.
+- 2.6.4 (prompt tweak: short/emoji-only Instagram captions are not slop) is built and tested offline but **not re-checked live**. Not verified: light theme, popup health warning, the "why" popover on misses, provider-side fetching of Instagram image URLs, Explore tiles (real tiles have no alt text, so nothing is scored). Known layout issue: the hover dock can cover Instagram's Follow button on suggested posts.
 - Verified live on x.com up to 2.4.1 (dock, LESS fold, topic folding, live updates, undo). 2.5.0 (rename/hardening) is covered by tests and rendered screenshots but not re-tested on live X.
 - Pushed. Remote is public `abs-j/heed` (`origin` → `https://github.com/abs-j/heed.git`). Privacy policy loads signed-out at `https://github.com/abs-j/heed/blob/main/PRIVACY.md`.
 
