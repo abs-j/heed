@@ -6,7 +6,7 @@ import { siteFor } from "./sites";
   const site = siteFor(location.hostname);
   // Any post with a little text gets a card so it can be marked by hand; the background
   // only sends posts of 40+ characters to an AI model (shorter ones are scored locally).
-    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, thirstMode: "fold", thirstThreshold: 70, thirstVision: false, tasteMode: "fold" };
+    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, thirstMode: "fold", thirstThreshold: 70, thirstVision: false, igShowFollowed: true, tasteMode: "fold" };
   // Only borderline posts get the (slower) creator-profile second pass.
   const BORDER = [35, 75];
 
@@ -197,6 +197,8 @@ import { siteFor } from "./sites";
     if (!settings.enabled || !article.isConnected) { seen.delete(article); return; }
     const text = textOf(article);
     const ctx = contextOf(article);
+    // Accounts the reader follows are left alone; only suggested posts, ads and reels are checked.
+    if (ctx.followed && settings.igShowFollowed) { article.dataset.sd = "ok"; return; }
     // A photo post with no caption is still judged on its image description.
     if (!text && !ctx.alt && !article.querySelector("video")) return;
     if (site.frameOf && settings.thirstVision && !ctx.images?.length) {
@@ -641,10 +643,11 @@ import { siteFor } from "./sites";
   addEventListener("keydown", (e) => { if (e.key === "Escape") closeWhyAndRefocus(); }, true);
 
   async function init() {
-    const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "tasteMode"]);
+    const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "igShowFollowed", "tasteMode"]);
     if (["fold", "hide", "off"].includes(s.thirstMode)) settings.thirstMode = s.thirstMode;
     if (typeof s.thirstThreshold === "number") settings.thirstThreshold = s.thirstThreshold;
     settings.thirstVision = s.thirstVision === true;
+    settings.igShowFollowed = s.igShowFollowed !== false;
     if (["fold", "off"].includes(s.tasteMode)) settings.tasteMode = s.tasteMode;
     if (["fold", "hide", "off"].includes(s.rageMode)) settings.rageMode = s.rageMode;
     if (typeof s.rageThreshold === "number") settings.rageThreshold = s.rageThreshold;
@@ -678,6 +681,7 @@ import { siteFor } from "./sites";
       if (ch.rageMode && ["fold", "hide", "off"].includes(ch.rageMode.newValue)) { settings.rageMode = ch.rageMode.newValue; dirty = true; }
       if (ch.tasteMode && ["fold", "off"].includes(ch.tasteMode.newValue)) { settings.tasteMode = ch.tasteMode.newValue; dirty = true; }
       if (ch.thirstMode && ["fold", "hide", "off"].includes(ch.thirstMode.newValue)) { settings.thirstMode = ch.thirstMode.newValue; dirty = true; }
+      if (ch.igShowFollowed) { settings.igShowFollowed = ch.igShowFollowed.newValue !== false; dirty = true; }
       if (ch.thirstVision) settings.thirstVision = ch.thirstVision.newValue === true;
       if (ch.thirstThreshold) { settings.thirstThreshold = Number(ch.thirstThreshold.newValue) || 70; dirty = true; }
       if (ch.rageThreshold) { settings.rageThreshold = Number(ch.rageThreshold.newValue) || 70; dirty = true; }

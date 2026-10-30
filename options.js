@@ -28,7 +28,7 @@ $("provider").addEventListener("change", showProvider);
 const sv = () => ($("sv").textContent = $("sensitivity").value);
 
 async function load() {
-  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "sdStatus", "sdSpend", "dailyBudget", "profiles", "customRules", "acctInfluence", "provider", "providerModel", "providerBase", "providerKeys", "tierMode", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "tasteMode"]);
+  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "sdStatus", "sdSpend", "dailyBudget", "profiles", "customRules", "acctInfluence", "provider", "providerModel", "providerBase", "providerKeys", "tierMode", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "igShowFollowed", "tasteMode"]);
   $("tasteMode").value = s.tasteMode === "off" ? "off" : "fold";
   $("rageMode").value = ["fold", "hide", "off"].includes(s.rageMode) ? s.rageMode : "fold";
   $("rageThreshold").value = s.rageThreshold ?? 70;
@@ -37,6 +37,7 @@ async function load() {
   $("thirstThreshold").value = s.thirstThreshold ?? 70;
   $("tv").textContent = $("thirstThreshold").value;
   $("thirstVision").checked = s.thirstVision === true;
+  $("igShowFollowed").checked = s.igShowFollowed !== false;
   const prov = PROV[s.provider] ? s.provider : "jev";
   $("provider").value = prov;
   $("tierMode").value = s.tierMode || "tiered";
@@ -78,7 +79,7 @@ $("save").addEventListener("click", async () => {
     provider: prov, providerModel: prov === "jev" ? "" : state.models[prov], providerBase: prov === "jev" ? "" : state.bases[prov],
     providerKeys: state.keys, tierMode: $("tierMode").value,
     rageMode: $("rageMode").value, rageThreshold: Number($("rageThreshold").value),
-    thirstMode: $("thirstMode").value, thirstThreshold: Number($("thirstThreshold").value), thirstVision: $("thirstVision").checked, tasteMode: $("tasteMode").value,
+    thirstMode: $("thirstMode").value, thirstThreshold: Number($("thirstThreshold").value), thirstVision: $("thirstVision").checked, igShowFollowed: $("igShowFollowed").checked, tasteMode: $("tasteMode").value,
     enabled: $("enabled").checked,
     mode: $("mode").value,
     sensitivity: Number($("sensitivity").value),

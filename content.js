@@ -348,7 +348,10 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       ctx.name = handle;
     }
     ctx.verified = !!a.querySelector('svg[aria-label="Verified"]');
-    if (/^Suggested for you$/m.test((a.innerText || "").slice(0, 400))) ctx.suggested = true;
+    const top = (a.innerText || "").slice(0, 400);
+    if (/^Suggested for you$/m.test(top)) ctx.suggested = true;
+    const reel = !!a.querySelector('a[href^="/reels/"], video');
+    if (!ctx.suggested && !reel && !/^(?:Ad|Sponsored)$/m.test(top)) ctx.followed = true;
     const posted = a.querySelector("time[datetime]")?.getAttribute("datetime");
     if (posted) ctx.postedAt = posted;
     const code = a.querySelector('a[href*="/p/"], a[href*="/reel/"]')?.getAttribute("href")?.match(/\/(?:p|reel)\/([\w-]+)/)?.[1];
@@ -418,7 +421,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
   // src/content/main.js
   (() => {
     const site = siteFor(location.hostname);
-    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, thirstMode: "fold", thirstThreshold: 70, thirstVision: false, tasteMode: "fold" };
+    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, thirstMode: "fold", thirstThreshold: 70, thirstVision: false, igShowFollowed: true, tasteMode: "fold" };
     const BORDER = [35, 75];
     const health = { articles: 0, handles: 0, probes: 0, probesOk: 0, noted: "" };
     function reportHealth() {
@@ -611,6 +614,10 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       }
       const text = textOf(article);
       const ctx = contextOf(article);
+      if (ctx.followed && settings.igShowFollowed) {
+        article.dataset.sd = "ok";
+        return;
+      }
       if (!text && !ctx.alt && !article.querySelector("video")) return;
       if (site.frameOf && settings.thirstVision && !ctx.images?.length) {
         const f = await site.frameOf(article);
@@ -1100,10 +1107,11 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       if (e.key === "Escape") closeWhyAndRefocus();
     }, true);
     async function init() {
-      const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "tasteMode"]);
+      const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "igShowFollowed", "tasteMode"]);
       if (["fold", "hide", "off"].includes(s.thirstMode)) settings.thirstMode = s.thirstMode;
       if (typeof s.thirstThreshold === "number") settings.thirstThreshold = s.thirstThreshold;
       settings.thirstVision = s.thirstVision === true;
+      settings.igShowFollowed = s.igShowFollowed !== false;
       if (["fold", "off"].includes(s.tasteMode)) settings.tasteMode = s.tasteMode;
       if (["fold", "hide", "off"].includes(s.rageMode)) settings.rageMode = s.rageMode;
       if (typeof s.rageThreshold === "number") settings.rageThreshold = s.rageThreshold;
@@ -1154,6 +1162,10 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         }
         if (ch.thirstMode && ["fold", "hide", "off"].includes(ch.thirstMode.newValue)) {
           settings.thirstMode = ch.thirstMode.newValue;
+          dirty = true;
+        }
+        if (ch.igShowFollowed) {
+          settings.igShowFollowed = ch.igShowFollowed.newValue !== false;
           dirty = true;
         }
         if (ch.thirstVision) settings.thirstVision = ch.thirstVision.newValue === true;

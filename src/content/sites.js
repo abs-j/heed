@@ -114,7 +114,12 @@ function igContext(a) {
   if (handle) { ctx.handle = handle; ctx.name = handle; }
   ctx.verified = !!a.querySelector('svg[aria-label="Verified"]');
   // "Suggested for you" sits under the name of accounts the reader does not follow.
-  if (/^Suggested for you$/m.test((a.innerText || "").slice(0, 400))) ctx.suggested = true;
+  const top = (a.innerText || "").slice(0, 400);
+  if (/^Suggested for you$/m.test(top)) ctx.suggested = true;
+  // A followed account's photo or carousel post: not suggested, not an ad, not a reel (reels and
+  // video posts link to /reels/<code>/ and carry a <video>).
+  const reel = !!a.querySelector('a[href^="/reels/"], video');
+  if (!ctx.suggested && !reel && !/^(?:Ad|Sponsored)$/m.test(top)) ctx.followed = true;
   const posted = a.querySelector("time[datetime]")?.getAttribute("datetime");
   if (posted) ctx.postedAt = posted;
   const code = a.querySelector('a[href*="/p/"], a[href*="/reel/"]')?.getAttribute("href")?.match(/\/(?:p|reel)\/([\w-]+)/)?.[1];

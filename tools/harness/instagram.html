@@ -38,7 +38,7 @@ POSTS.forEach(([h, cap, alt, code], i) => {
 const ad = document.createElement("article");
 ad.innerHTML = `<div class="top"><span dir="auto"><a href="/brand.shop/?hl=en"><span dir="auto">brand.shop</span></a></span><span dir="auto">Ad</span></div><div class="cap"><span dir="auto"><a href="/brand.shop/?hl=en"><span dir="auto">brand.shop</span></a> <span dir="auto">Docs, mail, chat and tasks in one modular app.</span></span></div>`;
 feed.append(ad);
-const store = { enabled: true, mode: "blur", sensitivity: 60, thirstMode: new URLSearchParams(location.search).get("thirst") || "fold" };
+const store = { enabled: true, igShowFollowed: false, mode: "blur", sensitivity: 60, thirstMode: new URLSearchParams(location.search).get("thirst") || "fold" };
 window.chrome = {
   storage: { local: { get: async () => store, set: async () => {} }, onChanged: { addListener() {} } },
   runtime: {
