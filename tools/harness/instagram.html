@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Heed harness: Instagram</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Fake Instagram feed with generated class names, to run the real content script against.
+     Served as https://www.instagram.com/ by tools/harness/instagram.mjs (the adapter keys off the hostname). -->
+<style>
+  body { margin: 0; background: #000; color: #f5f5f5; font: 14px/1.4 -apple-system, "Segoe UI", sans-serif; }
+  main { width: 470px; margin: 0 auto; }
+  article { border-bottom: 1px solid #262626; padding-bottom: 12px; }
+  header { display: flex; gap: 10px; align-items: center; padding: 12px 4px; }
+  header img { width: 32px; height: 32px; border-radius: 50%; }
+  header a { color: inherit; font-weight: 600; text-decoration: none; }
+  .x1a { display: block; width: 100%; height: 470px; background: #333; }
+  .cap { padding: 8px 4px; } .meta { color: #a8a8a8; padding: 0 4px; font-size: 12px; }
+</style></head>
+<body><main id="feed" role="main"></main>
+<script>
+const svg = (c) => "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="470" height="470"><rect width="470" height="470" fill="${c}"/></svg>`);
+const POSTS = [
+  ["mia.thirst", "Feeling cute 😏 rate me 1-10, be honest #bikini #baddie", "Photo by Mia on October 3, 2026. May be an image of 1 person, bikini and beach.", "CAAA1"],
+  ["coach_dan", "Leg day: 4 sets of squats, 3 sets of lunges, rest 90 seconds. Form tips in the comments.", "Photo by Dan. May be an image of 1 person in a gym.", "CAAA2"],
+  ["swimclub", "Gold in the 200m freestyle at the regional swim meet today! Proud of the whole swim team.", "Photo by Swim Club. May be an image of 3 people, swimwear and pool.", "CAAA3"],
+  ["emoji.only", "🍑😏", "Photo by Em. May be an image of 1 person, swimsuit and bare back.", "CAAA4"]
+];
+const feed = document.getElementById("feed");
+POSTS.forEach(([h, cap, alt, code], i) => {
+  const a = document.createElement("article");
+  a.className = "x1" + i;
+  a.innerHTML = `<header><img alt="${h}'s profile picture" src="${svg("#555")}" width="32" height="32"><a href="/${h}/">${h}</a><a href="/p/${code}/"><time datetime="2026-10-30T0${i}:00:00Z">1h</time></a></header>
+    <img class="x1a" alt="${alt}" src="${svg(["#a33", "#3a3", "#33a", "#a3a"][i])}" width="470" height="470">
+    <div class="meta">1,204 likes</div><div class="cap"><span dir="auto"><a href="/${h}/">${h}</a> <span dir="auto"></span></span></div>`;
+  a.querySelector(".cap span span").textContent = cap;
+  feed.append(a);
+});
+const store = { enabled: true, mode: "blur", sensitivity: 60, thirstMode: new URLSearchParams(location.search).get("thirst") || "fold" };
+window.chrome = {
+  storage: { local: { get: async () => store, set: async () => {} }, onChanged: { addListener() {} } },
+  runtime: {
+    getManifest: () => ({ version: "harness" }),
+    // Scores come from the real on-device scorers in lib.js.
+    sendMessage: async (m) => {
+      if (m.type === "analyze") {
+        const t = SD.thirst.localThirst(m.text, m.ctx.alt || "");
+        const sc = SD.localScore(m.text, undefined, m.ctx.platform);
+        return { score: sc.score, explanation: "Local classifier", key: "k" + (m.ctx.postId || m.text.length), pattern: "local", local: true, why: { hits: sc.hits, local: true },
+          thirst: t.score, thirstSrc: "local", thirstHits: t.hits, rage: 0, interest: 0, topics: [] };
+      }
+      return {};
+    }
+  }
+};
+</script>
+<script src="/lib.js"></script>
+<script src="/content.js"></script>
+<link rel="stylesheet" href="/content.css">
+</body></html>

@@ -9,7 +9,7 @@
 
   // src/lib/features.ts
   var sat = (n, k) => Math.min(1, n / k);
-  var count = (s, re3) => (s.match(re3) || []).length;
+  var count = (s, re4) => (s.match(re4) || []).length;
   function makeCtx(text) {
     const t = text.replace(/\r/g, "").trim();
     const words = t.toLowerCase().match(/[a-z0-9@#'’]+/g) || [];
@@ -376,12 +376,16 @@
   var priors = () => ({ bias: -1.2, w: Object.fromEntries(FEATURES.map((f) => [f.id, f.prior])) });
   var DEFAULT_WEIGHTS = weights_default?.w && Object.keys(weights_default.w).length ? weights_default : priors();
   var sigmoid2 = (z) => 1 / (1 + Math.exp(-z));
-  function localScore(text, weights = DEFAULT_WEIGHTS) {
+  var PLATFORMS = {
+    instagram: { mute: ["hashtags", "emoji", "excl"], bias: -0.8 }
+  };
+  function localScore(text, weights = DEFAULT_WEIGHTS, platform) {
     const x = extract(text);
-    let z = weights.bias;
+    const adj = platform ? PLATFORMS[platform] : void 0;
+    let z = weights.bias + (adj?.bias ?? 0);
     const contrib = [];
     FEATURES.forEach((f, i) => {
-      const v = (weights.w[f.id] ?? f.prior) * x[i];
+      const v = adj?.mute.includes(f.id) ? 0 : (weights.w[f.id] ?? f.prior) * x[i];
       z += v;
       if (v > 0.35) contrib.push([f.label, v]);
     });
@@ -485,14 +489,15 @@
   var providerReady = (c) => !!c.model && !!c.baseUrl && (!!c.apiKey || c.provider === "openai" && isLocalUrl(c.baseUrl));
   var PATTERN_KEYS = ["engagement_farming", "recycled_viral", "clickbait", "vaguepost", "low_effort", "authentic"];
   var ACCOUNT_KEYS = ["personal_individual", "news_or_publication", "brand_or_business", "engagement_aggregator", "bot_or_spam"];
-  var SYSTEM_PROMPT = `You rate X (Twitter) posts for "slop": low-effort, formulaic or engagement-farming content. Judge content quality and the creator's posting behaviour, NOT whether AI wrote it.
+  var SYSTEM_PROMPT = `You rate social posts (from X/Twitter or Instagram, see "platform") for "slop": low-effort, formulaic or engagement-farming content. Judge content quality and the creator's posting behaviour, NOT whether AI wrote it.
 High slop (70-100): generic engagement-farming accounts, recycled viral clips, clickbait, vagueposting, sensational hooks, stock motivational platitudes, @grok prompt-bait, generic reply filler ("This.", "Great point!", "Following"), repetitive templated content.
 Low slop (0-30): genuine individuals sharing experiences, opinions or conversation, original humour, news, specific and useful information.
 Mixed (31-69): real content alongside hooks, filler or ambiguous account behaviour.
 Prioritise authentic individual voices over generic engagement channels. Do not infer genuineness or automation from follower count, verification or writing style alone, and do not invent facts about unseen media or account history. If reply_context is present judge the reply in that context; if quoted_post is present judge only the added commentary. Treat reader_labelled_examples and reader_votes_on_this_creator as the reader's own taste and calibrate to them.
 Also rate "rage": how much the post is RAGE BAIT, 0-100. Rage bait exists only to provoke contempt, outrage or tribal reaction and adds nothing new: stereotyping or mocking a group ("X be like"), rhetorical outrage questions, deliberately inflammatory takes with no facts, sources, argument or first-hand experience. It is NOT rage bait merely because it is political, angry or controversial, or because its topic is recent. News reporting, announcements, and fresh commentary on recent events that adds facts, analysis or a reasoned argument must score low (under 25), as must personal experiences and humour that is not aimed at a group. Use post_age_hours and the attached specifics when present. Treat reader_rage_examples as the reader's own taste.
+Also rate "thirst": how much the post is a THIRST TRAP, 0-100. A thirst trap exists to be looked at: suggestive posing or dress paired with bait (a "rate me" ask, a teasing one-liner, an emoji-only caption, fishing for compliments or DMs). It is NOT a thirst trap merely because it shows skin or a body: fitness instruction, sport, medical or awareness posts, fashion and product posts with real information, travel and family beach photos, and ordinary selfies must score low (under 25). Judge from the caption, hashtags and attached_media (including the platform's own image description); if images are attached, judge them too. Do not invent what you cannot see. Treat reader_thirst_examples as the reader's own taste.
 Reply with ONLY a JSON object:
-{"slop": <integer 0-100>, "rage": <integer 0-100>, "rage_reason": <short phrase>, "pattern": one of ${JSON.stringify(PATTERN_KEYS)}, "account_type": one of ${JSON.stringify(ACCOUNT_KEYS)}, "account_confidence": <0-1>, "pattern_confidence": <0-1>, "rules": [<indexes of reader filters the post clearly matches>]}`;
+{"slop": <integer 0-100>, "rage": <integer 0-100>, "rage_reason": <short phrase>, "thirst": <integer 0-100>, "thirst_reason": <short phrase>, "pattern": one of ${JSON.stringify(PATTERN_KEYS)}, "account_type": one of ${JSON.stringify(ACCOUNT_KEYS)}, "account_confidence": <0-1>, "pattern_confidence": <0-1>, "rules": [<indexes of reader filters the post clearly matches>]}`;
   function buildUserPrompt(state, rules) {
     const filters = rules.length ? `
 Reader-defined filters (report the index of any the post CLEARLY matches in "rules"):
@@ -500,8 +505,9 @@ ${rules.map((r, i) => `${i}: ${r}`).join("\n")}` : "";
     return `Post data:
 ${JSON.stringify(state)}${filters}`;
   }
-  function buildRequest(cfg, state, rules) {
+  function buildRequest(cfg, state, rules, images = []) {
     const user = buildUserPrompt(state, rules);
+    const pics = isLocalUrl(cfg.baseUrl) ? [] : images.filter((u) => /^https:\/\//.test(u)).slice(0, 2);
     if (cfg.provider === "anthropic") {
       return {
         url: cfg.baseUrl,
@@ -511,7 +517,7 @@ ${JSON.stringify(state)}${filters}`;
           "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true"
         },
-        body: JSON.stringify({ model: cfg.model, max_tokens: 250, temperature: 0, system: SYSTEM_PROMPT, messages: [{ role: "user", content: user }] })
+        body: JSON.stringify({ model: cfg.model, max_tokens: 250, temperature: 0, system: SYSTEM_PROMPT, messages: [{ role: "user", content: pics.length ? [...pics.map((url) => ({ type: "image", source: { type: "url", url } })), { type: "text", text: user }] : user }] })
       };
     }
     const headers = { "content-type": "application/json" };
@@ -523,7 +529,7 @@ ${JSON.stringify(state)}${filters}`;
         model: cfg.model,
         max_tokens: 250,
         temperature: 0,
-        messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: user }]
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: pics.length ? [{ type: "text", text: user }, ...pics.map((url) => ({ type: "image_url", image_url: { url } }))] : user }]
       })
     };
   }
@@ -558,7 +564,10 @@ ${JSON.stringify(state)}${filters}`;
     const acct = ACCOUNT_KEYS.includes(o.account_type) ? o.account_type : null;
     const matched = (Array.isArray(o.rules) ? o.rules : []).map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 0 && n < ruleCount);
     const rage = num(o.rage, 0, 100);
+    const thirst = num(o.thirst, 0, 100);
     return {
+      thirst: thirst === null ? null : Math.round(thirst),
+      thirstReason: typeof o.thirst_reason === "string" ? o.thirst_reason.slice(0, 80) : "",
       score: Math.round(score),
       rage: rage === null ? null : Math.round(rage),
       rageReason: typeof o.rage_reason === "string" ? o.rage_reason.slice(0, 80) : "",
@@ -584,7 +593,8 @@ ${JSON.stringify(state)}${filters}`;
     if (o.mode === "local") return { use: "local", reason: "local-only" };
     if (o.mode === "tiered") {
       const rageSure = !o.rage?.on || o.rage.score <= RAGE_SURE.low || o.rage.score >= RAGE_SURE.high;
-      if (rageSure && localScore2 <= o.low) return { use: "local", reason: "confident-ok" };
+      const thirstSure = !o.thirst?.on || o.thirst.score <= RAGE_SURE.low || o.thirst.score >= RAGE_SURE.high;
+      if (rageSure && thirstSure && localScore2 <= o.low) return { use: "local", reason: "confident-ok" };
       if (localScore2 >= o.high) return { use: "local", reason: "confident-slop" };
     }
     return { use: "llm" };
@@ -601,7 +611,7 @@ ${JSON.stringify(state)}${filters}`;
   });
   var GROUP = "muslims?|christians?|jews|jewish people|atheists?|white people|black people|whites|asians?|men|women|males?|females?|girls|guys|boys|feminists?|liberals?|conservatives?|republicans?|democrats?|leftists?|libs|maga|boomers?|millennials?|gen ?z|zoomers?|immigrants?|americans?|europeans?|indians?|chinese|russians?|vegans?|teachers?|landlords?|rich people|poor people|single moms?|truck drivers?|gamers?|cat people|dog people|android users|iphone users|remote workers|tourists?|gym bros?|rich kids";
   var sat2 = (n, k) => Math.min(1, n / k);
-  var count2 = (s, re3) => (s.match(re3) || []).length;
+  var count2 = (s, re4) => (s.match(re4) || []).length;
   var re2 = (r, k = 1) => (c) => sat2(count2(c.text, r), k);
   var RAGE_FEATURES = [
     // ---- provocation
@@ -746,6 +756,143 @@ ${JSON.stringify(state)}${filters}`;
     return { bias: +b.toFixed(4), w: Object.fromEntries(ids.map((id, i) => [id, +w2[i].toFixed(4)])), trained: { n: rows.length, at: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) } };
   }
 
+  // src/lib/thirst.ts
+  var thirst_exports = {};
+  __export(thirst_exports, {
+    THIRST_FEATURES: () => THIRST_FEATURES,
+    THIRST_PRIOR: () => THIRST_PRIOR,
+    localThirst: () => localThirst,
+    refitThirst: () => refitThirst,
+    thirstVector: () => thirstVector
+  });
+  var sat3 = (n, k) => Math.min(1, n / k);
+  var count3 = (s, re4) => (s.match(re4) || []).length;
+  var re3 = (r, k = 1) => (c) => sat3(count3(c.text, r), k);
+  var ATTIRE = "bikinis?|swimsuits?|swimwear|lingerie|underwear|undies|thongs?|bras?|bralette|bodysuits?|shirtless|topless|crop top|cleavage|bare chest|bare back|sports bra|lace";
+  var THIRST_FEATURES = [
+    // ---- bait asks and phrasing
+    {
+      id: "ask",
+      label: "'rate me' / 'thoughts?' bait",
+      prior: 1.8,
+      fn: re3(/\b(?:rate (?:me|this|my)|rate it|how (?:do|am) i look|do i pass|am i your type|be honest|what(?:'|’)?s my (?:score|number)|guess my age|tell me i(?:'|’)?m (?:pretty|cute|hot)|would you (?:date|take|hit|swipe|slide)|who(?:'|’)?s (?:up|awake)|thoughts\?|r(?:ate)? 1-10|out of 10|\/10\b)/gi, 2)
+    },
+    {
+      id: "tease",
+      label: "teasing caption",
+      prior: 1.5,
+      fn: re3(/\b(?:feeling (?:cute|myself|spicy|good about)|caught in 4k|just a little|you(?:'|’)?re welcome|don(?:'|’)?t look|not for the faint|no caption needed|you know what (?:this|it) is|new pic|shower thought|private story|close friends|dm me|slide in|link in bio for more|exclusive content|only ?fans|fansly|spicy|naughty|nsfw|18\+|thirst|baddie|thicc|snack)\b/gi, 2)
+    },
+    {
+      id: "body",
+      label: "caption about a body",
+      prior: 1.4,
+      fn: re3(/\b(?:sexy|hot (?:girl|guy|body|summer)|hottie|curves?|booty|abs|six[- ]?pack|legs|thighs?|cleavage|gorgeous body|drop[- ]dead|eye candy|body goals|bad (?:girl|bitch)|stunning)\b/gi, 2)
+    },
+    { id: "emoji", label: "suggestive emoji", prior: 0.9, fn: re3(/[😏🥵😈🍑🍆💦😘😉🫦🔥]/gu, 2) },
+    {
+      id: "tags",
+      label: "bait hashtags",
+      prior: 1.6,
+      fn: re3(/#(?:thirsttrap|baddie|baddies|hotgirl|hotguy|hottie|sexy|sexygirl|sexyman|bikini|bikinimodel|bikinibody|lingerie|lingeriemodel|shirtless|instahot|instababe|babe|thicc|curvy|bodygoals|boudoir|swimsuit|swimwear|spicy|nsfw|onlyfans|fitgirl|gymgirl|gymcrush|abs|mirrorselfie|selfie)\b/gi, 2)
+    },
+    { id: "attire", label: "swimwear / underwear mentioned", prior: 0.9, fn: re3(new RegExp(`\\b(?:${ATTIRE})\\b`, "gi"), 2) },
+    {
+      id: "alt",
+      label: "photo shows swimwear / little clothing",
+      prior: 1.5,
+      fn: (c) => sat3(count3(c.alt, new RegExp(`\\b(?:${ATTIRE}|bare skin|midriff)\\b`, "gi")), 1)
+    },
+    {
+      id: "bare",
+      label: "almost no caption",
+      prior: 1,
+      fn: (c) => c.alt && c.words.filter((w2) => !w2.startsWith("#")).length <= 4 ? 1 : 0
+    },
+    // ---- counter-signals: information, craft or news pull the score down
+    {
+      id: "howto",
+      label: "how-to or training content",
+      prior: -1.6,
+      fn: re3(/\b(?:workout|exercise|reps?|sets?|routine|tutorial|how to|tips?|form|technique|stretch(?:ing)?|mobility|recipe|ingredients|macros|protein|programme|program|training plan|rehab|physio|coach(?:ing)?)\b/gi, 2)
+    },
+    {
+      id: "event",
+      label: "sport, event or news context",
+      prior: -1.5,
+      fn: re3(/\b(?:swim (?:meet|team|club|race|lessons?)|olympics?|championships?|tournament|medal|race|marathon|triathlon|lifeguard|according to|announced|breaking|study|research|surgery|cancer|awareness|fundraiser|charity)\b/gi, 2)
+    },
+    {
+      id: "craft",
+      label: "photo or fashion credit",
+      prior: -0.9,
+      fn: re3(/\b(?:photograph(?:er|y)|shot by|photo by|styled by|wardrobe|collection|campaign|editorial|runway|lookbook|designer|brand|ad\b|sponsored|#ad\b)\b/gi, 2)
+    },
+    {
+      id: "travel",
+      label: "travel or place",
+      prior: -0.8,
+      fn: re3(/\b(?:trip|travel|vacation|holiday|beach day|hike|sunset|resort|island|waves|surf(?:ing)?|diving|snorkel(?:ing)?|kayak)\b/gi, 2)
+    },
+    {
+      id: "substance",
+      label: "a real sentence of context",
+      prior: -1.1,
+      fn: (c) => sat3(Math.max(0, c.words.filter((w2) => !w2.startsWith("#") && !w2.startsWith("@")).length - 14), 24)
+    },
+    {
+      id: "firsthand",
+      label: "personal story",
+      prior: -0.8,
+      fn: (c) => sat3(c.words.filter((w2) => /^(?:my|we|our|i've|i’ve|because|after|when)$/.test(w2)).length, 4)
+    }
+  ];
+  var THIRST_PRIOR = { bias: -2.3, w: Object.fromEntries(THIRST_FEATURES.map((f) => [f.id, f.prior])) };
+  var sigmoid4 = (z) => 1 / (1 + Math.exp(-z));
+  var ctxOf = (text, alt = "") => ({ ...makeCtx(text), alt: alt.slice(0, 400) });
+  var thirstVector = (text, alt = "") => {
+    const c = ctxOf(text, alt);
+    return THIRST_FEATURES.map((f) => f.fn(c));
+  };
+  function localThirst(text, alt = "", weights = THIRST_PRIOR) {
+    const x = thirstVector(text, alt);
+    let z = weights.bias;
+    const contrib = [];
+    THIRST_FEATURES.forEach((f, i) => {
+      const v = (weights.w[f.id] ?? f.prior) * x[i];
+      z += v;
+      if (v > 0.5) contrib.push([f.label, v]);
+    });
+    const p = sigmoid4(z);
+    contrib.sort((a, b) => b[1] - a[1]);
+    return { score: Math.round(p * 100), p, hits: contrib.slice(0, 4).map((c) => c[0]) };
+  }
+  function refitThirst(votes, base = THIRST_PRIOR) {
+    const rows = votes.filter((v) => (v.text || v.alt) && (v.label === "thirst" || v.label === "not_thirst"));
+    const ids = THIRST_FEATURES.map((f) => f.id);
+    const w0 = ids.map((id, i) => base.w[id] ?? THIRST_FEATURES[i].prior);
+    let b = base.bias;
+    const w2 = [...w0];
+    if (rows.length >= 4) {
+      const data = rows.map((v) => ({ x: thirstVector(v.text || "", v.alt || ""), y: v.label === "thirst" ? 1 : 0 }));
+      const clampTo = (v, c) => Math.min(c + 1.5, Math.max(c - 1.5, v));
+      for (let e = 0; e < 160; e++) {
+        const gw = new Array(w2.length).fill(0);
+        let gb = 0;
+        for (const { x, y } of data) {
+          let z = b;
+          for (let i = 0; i < w2.length; i++) z += w2[i] * x[i];
+          const err = (sigmoid4(z) - y) * 2;
+          gb += err;
+          for (let i = 0; i < w2.length; i++) gw[i] += err * x[i];
+        }
+        b = clampTo(b - 0.2 * gb / data.length, base.bias);
+        for (let i = 0; i < w2.length; i++) w2[i] = clampTo(w2[i] - 0.2 * (gw[i] / data.length + 0.06 * (w2[i] - w0[i])), w0[i]);
+      }
+    }
+    return { bias: +b.toFixed(4), w: Object.fromEntries(ids.map((id, i) => [id, +w2[i].toFixed(4)])), trained: { n: rows.length, at: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) } };
+  }
+
   // src/lib/interest.ts
   var interest_exports = {};
   __export(interest_exports, {
@@ -838,12 +985,12 @@ ${JSON.stringify(state)}${filters}`;
       re: w("nasa|space|physics|climate|research|study|paper|astronomy|species|quantum|biology|researchers?|telescope|experiment")
     }
   ];
-  var count3 = (s, re3) => new Set(s.toLowerCase().match(re3) || []).size;
+  var count4 = (s, re4) => new Set(s.toLowerCase().match(re4) || []).size;
   function topicsOf(text) {
     const short = text.trim().split(/\s+/).length <= 12;
     const scored = [];
     for (const t of TOPICS) {
-      const n = count3(text, t.re) + (t.strong?.test(text) ? 2 : 0);
+      const n = count4(text, t.re) + (t.strong?.test(text) ? 2 : 0);
       if (n >= 2 || n >= 1 && short) scored.push([t.id, n]);
     }
     return scored.sort((a, b) => b[1] - a[1]).slice(0, 2).map((x) => x[0]);
@@ -879,6 +1026,6 @@ ${JSON.stringify(state)}${filters}`;
   }
 
   // src/lib/index.ts
-  var SD = { ...scoring_exports, localScore, sgdStep, DEFAULT_WEIGHTS, learn, FEATURES, providers: providers_exports, router: router_exports, rage: rage_exports, interest: interest_exports, topics: topics_exports };
+  var SD = { ...scoring_exports, localScore, sgdStep, DEFAULT_WEIGHTS, learn, FEATURES, providers: providers_exports, router: router_exports, rage: rage_exports, thirst: thirst_exports, interest: interest_exports, topics: topics_exports };
   globalThis.SD = SD;
 })();

@@ -28,11 +28,15 @@ $("provider").addEventListener("change", showProvider);
 const sv = () => ($("sv").textContent = $("sensitivity").value);
 
 async function load() {
-  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "sdStatus", "sdSpend", "dailyBudget", "profiles", "customRules", "acctInfluence", "provider", "providerModel", "providerBase", "providerKeys", "tierMode", "rageMode", "rageThreshold", "tasteMode"]);
+  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "sdStatus", "sdSpend", "dailyBudget", "profiles", "customRules", "acctInfluence", "provider", "providerModel", "providerBase", "providerKeys", "tierMode", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "tasteMode"]);
   $("tasteMode").value = s.tasteMode === "off" ? "off" : "fold";
   $("rageMode").value = ["fold", "hide", "off"].includes(s.rageMode) ? s.rageMode : "fold";
   $("rageThreshold").value = s.rageThreshold ?? 70;
   $("rv").textContent = $("rageThreshold").value;
+  $("thirstMode").value = ["fold", "hide", "off"].includes(s.thirstMode) ? s.thirstMode : "fold";
+  $("thirstThreshold").value = s.thirstThreshold ?? 70;
+  $("tv").textContent = $("thirstThreshold").value;
+  $("thirstVision").checked = s.thirstVision === true;
   const prov = PROV[s.provider] ? s.provider : "jev";
   $("provider").value = prov;
   $("tierMode").value = s.tierMode || "tiered";
@@ -55,6 +59,7 @@ async function load() {
 
 $("sensitivity").addEventListener("input", sv);
 $("rageThreshold").addEventListener("input", () => ($("rv").textContent = $("rageThreshold").value));
+$("thirstThreshold").addEventListener("input", () => ($("tv").textContent = $("thirstThreshold").value));
 $("acctInfluence").addEventListener("input", () => ($("iv").textContent = $("acctInfluence").value));
 $("save").addEventListener("click", async () => {
   stash();
@@ -72,7 +77,8 @@ $("save").addEventListener("click", async () => {
   await chrome.storage.local.set({
     provider: prov, providerModel: prov === "jev" ? "" : state.models[prov], providerBase: prov === "jev" ? "" : state.bases[prov],
     providerKeys: state.keys, tierMode: $("tierMode").value,
-    rageMode: $("rageMode").value, rageThreshold: Number($("rageThreshold").value), tasteMode: $("tasteMode").value,
+    rageMode: $("rageMode").value, rageThreshold: Number($("rageThreshold").value),
+    thirstMode: $("thirstMode").value, thirstThreshold: Number($("thirstThreshold").value), thirstVision: $("thirstVision").checked, tasteMode: $("tasteMode").value,
     enabled: $("enabled").checked,
     mode: $("mode").value,
     sensitivity: Number($("sensitivity").value),
@@ -312,12 +318,12 @@ async function renderStats() {
 
 // ---- Export / import ----
 $("export").addEventListener("click", async () => {
-  const s = await chrome.storage.local.get(["sdVotes", "sdCreators", "customRules", "mode", "sensitivity", "dailyBudget", "profiles", "acctInfluence", "sdTaste", "sdRageVotes", "topicManual", "rageMode", "rageThreshold", "tasteMode"]);
+  const s = await chrome.storage.local.get(["sdVotes", "sdCreators", "customRules", "mode", "sensitivity", "dailyBudget", "profiles", "acctInfluence", "sdTaste", "sdRageVotes", "sdThirstVotes", "topicManual", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "tasteMode"]);
   const payload = {
     app: "heed", version: 1, exported: new Date().toISOString(),
-    votes: s.sdVotes || [], reactions: s.sdTaste || [], rageVotes: s.sdRageVotes || [], topicManual: s.topicManual || {},
+    votes: s.sdVotes || [], reactions: s.sdTaste || [], rageVotes: s.sdRageVotes || [], thirstVotes: s.sdThirstVotes || [], topicManual: s.topicManual || {},
     creators: s.sdCreators || {}, customRules: s.customRules || [],
-    settings: { mode: s.mode, sensitivity: s.sensitivity, dailyBudget: s.dailyBudget, profiles: s.profiles, acctInfluence: s.acctInfluence, rageMode: s.rageMode, rageThreshold: s.rageThreshold, tasteMode: s.tasteMode }
+    settings: { mode: s.mode, sensitivity: s.sensitivity, dailyBudget: s.dailyBudget, profiles: s.profiles, acctInfluence: s.acctInfluence, rageMode: s.rageMode, rageThreshold: s.rageThreshold, thirstMode: s.thirstMode, thirstThreshold: s.thirstThreshold, tasteMode: s.tasteMode }
   };
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
@@ -351,10 +357,11 @@ $("importFile").addEventListener("change", async (ev) => {
     };
     const keyed = (arr, ok) => { const m = new Map(); for (const v of Array.isArray(arr) ? arr : []) if (v && typeof v.key === "string" && typeof v.text === "string" && ok(v.label)) m.set(v.key, { key: v.key, text: v.text.slice(0, 280), label: v.label, handle: v.handle, ts: v.ts || Date.now() }); return m; };
     if (Array.isArray(d.reactions)) {
-      const cur2 = await chrome.storage.local.get(["sdTaste", "sdRageVotes"]);
+      const cur2 = await chrome.storage.local.get(["sdTaste", "sdRageVotes", "sdThirstVotes"]);
       const merge = (old, add) => { const m = new Map((old || []).map((v) => [v.key, v])); for (const [k, v] of add) m.set(k, v); return [...m.values()].sort((a, b) => a.ts - b.ts); };
       set.sdTaste = merge(cur2.sdTaste, keyed(d.reactions, (l) => l === "less" || l === "more")).slice(-400);
       set.sdRageVotes = merge(cur2.sdRageVotes, keyed(d.rageVotes, (l) => l === "rage" || l === "not_rage")).slice(-300);
+      set.sdThirstVotes = merge(cur2.sdThirstVotes, keyed(d.thirstVotes, (l) => l === "thirst" || l === "not_thirst")).slice(-300);
     }
     if (d.topicManual && typeof d.topicManual === "object") {
       set.topicManual = Object.fromEntries(Object.entries(d.topicManual).filter(([k, v]) => SD.topics.TOPICS.some((t) => t.id === k) && (v === "less" || v === "more")));

@@ -1,20 +1,21 @@
 /* Page-level rules only. Everything we draw (strip, chip, popover) lives in a
    shadow root inside <sd-card> and is styled by src/content/ui.ts. */
-:root { --sd-less: #8fa3c8; --sd-slop: #f2545b; --sd-warn: #eeb23a; --sd-ok: #2fb67c; --sd-rage: #f0883e; }
+:root { --sd-less: #8fa3c8; --sd-slop: #f2545b; --sd-warn: #eeb23a; --sd-ok: #2fb67c; --sd-rage: #f0883e; --sd-thirst: #e0609e; }
 /* Darker verdict colours on light themes keep text at >= 4.5:1. */
-:root[data-sd-theme="light"] { --sd-slop: #bd2530; --sd-warn: #8a5a00; --sd-ok: #17724c; --sd-rage: #a64b00; --sd-less: #3f5380; }
+:root[data-sd-theme="light"] { --sd-slop: #bd2530; --sd-warn: #8a5a00; --sd-ok: #17724c; --sd-rage: #a64b00; --sd-less: #3f5380; --sd-thirst: #a8266f; }
 :root { --sd-fg: #0f1419; --sd-bg: #fff; --sd-mute: #536471; --sd-border: #cfd9de; }
 :root[data-sd-theme="dark"] { --sd-mute: #71767b; --sd-border: #2f3336; }
 
 [data-sd-hidden], [data-sd-folded] { display: none !important; }
 
-article[data-testid="tweet"][data-sd] { position: relative; }
+article[data-testid="tweet"][data-sd], html[data-sd-site="instagram"] article[data-sd] { position: relative; }
 /* The card ignores the pointer itself, so hover is read off the post and handed in as a variable. */
-article[data-testid="tweet"][data-sd]:hover > sd-card, article[data-testid="tweet"][data-sd]:focus-within > sd-card { --dock-o: 1; }
+article[data-testid="tweet"][data-sd]:hover > sd-card, article[data-testid="tweet"][data-sd]:focus-within > sd-card,
+html[data-sd-site="instagram"] article[data-sd]:hover > sd-card, html[data-sd-site="instagram"] article[data-sd]:focus-within > sd-card { --dock-o: 1; }
 
 /* Folded slop: the post collapses to one row; its content stays in the DOM, blurred,
    and a hover opens it with a height transition. */
-article[data-testid="tweet"][data-sd-fold] {
+article[data-testid="tweet"][data-sd-fold], html[data-sd-site="instagram"] article[data-sd-fold] {
   max-height: 64px; overflow: hidden;
   transition: max-height .3s cubic-bezier(.2,.8,.2,1);
 }
@@ -29,13 +30,23 @@ article[data-sd-dim] { opacity: .45; transition: opacity .2s ease; }
 article[data-sd-dim]:hover { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
-  article[data-testid="tweet"][data-sd-fold], article[data-sd-fold] > * { transition: none !important; }
+  article[data-testid="tweet"][data-sd-fold], html[data-sd-site="instagram"] article[data-sd-fold], article[data-sd-fold] > * { transition: none !important; }
 }
 
 /* The why popover hangs below its post: let it escape X's overflow clipping and lift its
    whole timeline cell above the cells that follow (each cell is its own stacking context). */
-article[data-testid="tweet"][data-sd][data-sd-why] { overflow: visible !important; }
+article[data-testid="tweet"][data-sd][data-sd-why], html[data-sd-site="instagram"] article[data-sd][data-sd-why] { overflow: visible !important; }
 [data-testid="cellInnerDiv"]:has(article[data-sd-why]) { z-index: 50 !important; }
 
 /* Profile lookups open X's hover card invisibly for a moment. */
 html.sd-probing [data-testid="HoverCard"] { opacity: 0 !important; pointer-events: none !important; }
+
+/* Instagram: the post's own elements are blurred while folded, but its header sits in the same box,
+   so keep the whole article a single clipped row like on X. */
+html[data-sd-site="instagram"] article[data-sd-fold] { width: 100%; }
+
+/* Explore / profile grid thumbnails scored as thirst traps: blurred until hovered or focused. */
+a[data-sd-tile] img { filter: blur(22px) saturate(.6); transition: filter .2s ease; }
+a[data-sd-tile]:hover img, a[data-sd-tile]:focus-visible img { filter: none; }
+a[data-sd-tile="hide"] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { a[data-sd-tile] img { transition: none !important; } }

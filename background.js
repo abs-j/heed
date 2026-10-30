@@ -43,13 +43,15 @@ let model = null;
 let modelLoaded = null;
 function loadModel() {
   if (!modelLoaded) {
-    modelLoaded = chrome.storage.local.get(["sdModel", "learn", "sdRageVotes", "sdRageModel", "sdTaste", "sdVotes", "tasteMode", "topicManual"]).then((r) => {
+    modelLoaded = chrome.storage.local.get(["sdModel", "learn", "sdRageVotes", "sdRageModel", "sdThirstVotes", "sdThirstModel", "sdTaste", "sdVotes", "tasteMode", "topicManual"]).then((r) => {
       tasteOn = r.tasteMode !== "off";
       topicManual = r.topicManual || {};
       rebuildInterest(r.sdTaste || [], r.sdVotes || []);
       model = r.learn === false ? null : r.sdModel || null;
       rageModel = r.learn === false ? null : r.sdRageModel || null;
       rageFb = Object.fromEntries((r.sdRageVotes || []).map((v) => [v.key, v.label]));
+      thirstModel = r.learn === false ? null : r.sdThirstModel || null;
+      thirstFb = Object.fromEntries((r.sdThirstVotes || []).map((v) => [v.key, v.label]));
       localMemo.clear();
     });
   }
@@ -83,7 +85,7 @@ function scheduleInterest() {
     localMemo.clear();
   }, 400);
 }
-async function react({ key, text, label, handle, score = 0, rage = 0, folded = [] }) {
+async function react({ key, text, label, handle, score = 0, rage = 0, thirst = 0, alt, folded = [] }) {
   if (!key || (label !== "like" && label !== "dislike")) return { error: "bad reaction" };
   const { sdTaste = [] } = await chrome.storage.local.get("sdTaste");
   const rest = sdTaste.filter((v) => v.key !== key);
@@ -93,9 +95,11 @@ async function react({ key, text, label, handle, score = 0, rage = 0, folded = [
   if (label === "dislike") {
     if (score >= 50 && !folded.includes("slop")) await feedback({ key, text, label: "slop", handle });
     if (rage >= 50 && !folded.includes("rage")) await rageVote({ key, text, label: "rage", handle });
+    if (thirst >= 50 && !folded.includes("thirst")) await thirstVote({ key, text, alt, label: "thirst", handle });
   } else {
     if (folded.includes("slop")) await feedback({ key, text, label: "not_slop", handle });
     if (folded.includes("rage")) await rageVote({ key, text, label: "not_rage", handle });
+    if (folded.includes("thirst")) await thirstVote({ key, text, alt, label: "not_thirst", handle });
   }
   scheduleInterest();
   return { key, reaction: label };
@@ -106,6 +110,7 @@ async function unreact({ key }) {
   await chrome.storage.local.set({ sdTaste: sdTaste.filter((v) => v.key !== key) });
   await unvote({ key });
   await rageUnvote({ key });
+  await thirstUnvote({ key });
   scheduleInterest();
   return { key };
 }
@@ -176,14 +181,74 @@ async function rageUnvote({ key }) {
   return { key };
 }
 
+// ---- Thirst traps -----------------------------------------------------------
+// A third verdict, same shape as rage: the AI model answers it when it is asked anyway, the
+// on-device scorer (src/lib/thirst.ts) covers the rest, the reader's votes override both.
+let thirstModel = null;
+let thirstFb = {};   // post key -> "thirst" | "not_thirst"
+async function getThirstSettings() {
+  const { thirstMode, thirstThreshold, thirstVision } = await chrome.storage.local.get(["thirstMode", "thirstThreshold", "thirstVision"]);
+  return { mode: ["fold", "hide", "off"].includes(thirstMode) ? thirstMode : "fold", threshold: Number(thirstThreshold) || 70, vision: thirstVision === true };
+}
+async function getThirstExamples(text) {
+  const { sdThirstVotes = [] } = await chrome.storage.local.get("sdThirstVotes");
+  if (!sdThirstVotes.length) return [];
+  const w = words(text);
+  const rel = (v) => { const vw = words(v.text); let i = 0; for (const x of vw) if (w.has(x)) i++; return i / (vw.size + w.size - i || 1); };
+  const pick = (label) => sdThirstVotes.filter((v) => v.label === label).map((v, i) => ({ v, r: rel(v) + i * 1e-4 }))
+    .sort((a, b) => b.r - a.r).slice(0, 3).map((x) => ({ text: x.v.text.slice(0, 240), user_label: x.v.label }));
+  return [...pick("thirst"), ...pick("not_thirst")];
+}
+function withThirst(r, { text, ctx }) {
+  if (!r || typeof r !== "object" || r.error) return r;
+  const lt = SD.thirst.localThirst(text, ctx?.alt || "", thirstModel || undefined);
+  const fb = r.key && thirstFb[r.key];
+  let thirst = typeof r.thirst === "number" ? r.thirst : lt.score;
+  let src = typeof r.thirst === "number" ? "model" : "local";
+  if (r.pattern === "creator_trusted") { thirst = 0; src = "you"; }
+  if (fb) { thirst = fb === "thirst" ? 100 : 0; src = "you"; }
+  return {
+    ...r, thirst, thirstSrc: src, thirstHits: lt.hits,
+    thirstReason: r.thirstReason || lt.hits.slice(0, 2).join(", "), thirstFb: fb || undefined
+  };
+}
+let thirstRefitTimer = null;
+function scheduleThirstRefit() {
+  clearTimeout(thirstRefitTimer);
+  thirstRefitTimer = setTimeout(async () => {
+    const { sdThirstVotes = [], learn } = await chrome.storage.local.get(["sdThirstVotes", "learn"]);
+    if (learn === false || sdThirstVotes.length < 4) { thirstModel = null; await chrome.storage.local.remove("sdThirstModel"); return; }
+    thirstModel = SD.thirst.refitThirst(sdThirstVotes);
+    await chrome.storage.local.set({ sdThirstModel: thirstModel });
+  }, 800);
+}
+async function thirstVote({ key, text, alt, label, handle }) {
+  if (!key || (label !== "thirst" && label !== "not_thirst")) return { error: "bad vote" };
+  const { sdThirstVotes = [] } = await chrome.storage.local.get("sdThirstVotes");
+  const votes = sdThirstVotes.filter((v) => v.key !== key);
+  votes.push({ key, text: String(text).slice(0, 280), alt: alt ? String(alt).slice(0, 200) : undefined, label, handle: handle || undefined, ts: Date.now() });
+  thirstFb[key] = label;
+  await chrome.storage.local.set({ sdThirstVotes: votes.slice(-300) });
+  scheduleThirstRefit();
+  return { key, thirstFb: label };
+}
+async function thirstUnvote({ key }) {
+  const { sdThirstVotes = [] } = await chrome.storage.local.get("sdThirstVotes");
+  delete thirstFb[key];
+  await chrome.storage.local.set({ sdThirstVotes: sdThirstVotes.filter((v) => v.key !== key) });
+  scheduleThirstRefit();
+  return { key };
+}
+
 // A post is scored a few times per request (routing, hints, explanation); memoise by text.
 const localMemo = new Map();
-function local(text) {
-  let r = localMemo.get(text);
+function local(text, platform) {
+  const mk = platform ? platform + "\u0000" + text : text;
+  let r = localMemo.get(mk);
   if (!r) {
-    r = SD.localScore(text, model || undefined);
+    r = SD.localScore(text, model || undefined, platform);
     if (localMemo.size >= 300) localMemo.delete(localMemo.keys().next().value);
-    localMemo.set(text, r);
+    localMemo.set(mk, r);
   }
   return r;
 }
@@ -213,14 +278,16 @@ chrome.storage.onChanged?.addListener((ch, area) => {
   if (ch.topicManual) { topicManual = ch.topicManual.newValue || {}; scheduleInterest(); }
   if (ch.sdRageVotes || ch.learn) scheduleRageRefit();
   if (ch.sdRageModel && !ch.sdRageVotes) rageModel = ch.sdRageModel.newValue || null;
+  if (ch.sdThirstVotes || ch.learn) scheduleThirstRefit();
+  if (ch.sdThirstModel && !ch.sdThirstVotes) thirstModel = ch.sdThirstModel.newValue || null;
   if (ch.sdModel && !ch.sdVotes && !ch.learn) { model = ch.sdModel.newValue || null; localMemo.clear(); }
 });
 
 // ---- Local heuristics -------------------------------------------------------
 // Free, instant signals (adapted from the patterns rule-based detectors use).
 // Used as hints for Jev and as a fallback when the API is unavailable.
-function localResult(text, key, why) {
-  const { score, hits } = local(text);
+function localResult(text, key, why, platform) {
+  const { score, hits } = local(text, platform);
   const note = why === "budget" ? "daily budget reached" : why === "nokey" ? "no API key" : "API unavailable";
   return {
     score, pattern: "local", conf: 0, local: true, key, why: { hits, local: true },
@@ -448,8 +515,9 @@ async function buildContext(text, ctx) {
   const prevType = (await getProfileRecord(ctx?.handle))?.type;
   const rules = await getRules();
   const rageEx = await getRageExamples(text);
+  const thirstEx = await getThirstExamples(text);
   const state = {
-    platform: "X (Twitter) post",
+    platform: ctx?.platform === "instagram" ? "Instagram post" : "X (Twitter) post",
     post: text.slice(0, 1500),
     ...(ctx?.handle || ctx?.name ? {
       creator: {
@@ -469,7 +537,7 @@ async function buildContext(text, ctx) {
         recent: author.recent.map((r) => r.t)
       }
     } : {}),
-    ...(local(text).hits.length ? { surface_signals_detected_locally: local(text).hits } : {}),
+    ...(local(text, ctx?.platform).hits.length ? { surface_signals_detected_locally: local(text, ctx?.platform).hits } : {}),
     ...(ctx?.replyTo || ctx?.parent ? {
       reply_context: {
         ...(ctx.replyTo ? { replying_to: ctx.replyTo } : {}),
@@ -482,7 +550,8 @@ async function buildContext(text, ctx) {
     ...(ctx?.context ? { feed_context: ctx.context } : {}),
     ...(examples.length ? { reader_labelled_examples: examples } : {}),
     ...(ctx?.postedAt ? { posted_at: ctx.postedAt, post_age_hours: Math.round((ageHours(ctx.postedAt) ?? 0) * 10) / 10 } : {}),
-    ...(rageEx.length ? { reader_rage_examples: rageEx } : {})
+    ...(rageEx.length ? { reader_rage_examples: rageEx } : {}),
+    ...(thirstEx.length ? { reader_thirst_examples: thirstEx } : {})
   };
   return { state, examples, votedOn, rules };
 }
@@ -529,6 +598,17 @@ async function callJev(text, ctx, apiKey) {
           "90-100: Pure rage bait. Exists only to provoke an emotional reaction; nothing new, specific or sourced"
         ]
       },
+      thirst: {
+        type: "score",
+        instructions: "How much is this post a THIRST TRAP? A thirst trap exists to be looked at: suggestive posing or dress paired with bait (a 'rate me' ask, a teasing one-liner, an emoji-only caption, fishing for compliments or DMs). It is NOT a thirst trap merely because it shows skin or a body: fitness instruction, sport, medical or awareness posts, fashion and product posts with real information, travel and family beach photos, and ordinary selfies must score low. Judge from the caption, hashtags and attached_media (including the platform's own image description); do not invent what you cannot see. If reader_thirst_examples are present, calibrate to the reader's taste.",
+        criteria: [
+          "0-10: Not a thirst trap. Ordinary, informational, sporting, family, travel or professional content",
+          "11-30: Shows a body or swimwear incidentally, with real context or information",
+          "31-69: Mixed. Flattering or suggestive framing with some context, or ambiguous intent",
+          "70-89: Mostly a thirst trap. Suggestive posing with a bait caption and little else",
+          "90-100: Pure thirst trap. Exists only to be looked at: rate-me asks, teasing captions, solicitations"
+        ]
+      },
       pattern: {
         type: "choice",
         instructions: "Which pattern best describes this post and its creator's behaviour?",
@@ -564,6 +644,8 @@ async function callJev(text, ctx, apiKey) {
   const score = Math.round(Math.min(1, Math.max(0, s.score / (SCORE_LABELS.length - 1))) * 100);
   const rageA = data.answers?.rage;
   const rage = typeof rageA?.score === "number" ? Math.round(Math.min(1, Math.max(0, rageA.score / 4)) * 100) : null;
+  const thirstA = data.answers?.thirst;
+  const thirst = typeof thirstA?.score === "number" ? Math.round(Math.min(1, Math.max(0, thirstA.score / 4)) * 100) : null;
   const pattern = p?.choice in PATTERNS ? p.choice : "authentic";
   const patConf = p?.probabilities?.[pattern] ?? p?.confidence ?? 0;
   const t = data.answers?.account_type;
@@ -573,7 +655,7 @@ async function callJev(text, ctx, apiKey) {
     const a = data.answers?.[`rule_${i}`];
     return a?.choice === "match" && (a.probabilities?.match ?? 1) >= 0.6;
   });
-  return finishResult({ score, rage, rageReason: "", pattern, patConf, acct, acctConf, matched, cost: data.usage?.cost || 0 }, text, ctx, { examples, votedOn, rules });
+  return finishResult({ score, rage, rageReason: "", thirst, thirstReason: "", pattern, patConf, acct, acctConf, matched, cost: data.usage?.cost || 0 }, text, ctx, { examples, votedOn, rules });
 }
 
 // Turns a provider's parsed answer into the cache/UI result shape.
@@ -581,13 +663,14 @@ function finishResult(a, text, ctx, { examples, votedOn, rules }) {
   if (a.acct && ctx?.handle) patchProfile(ctx.handle, { type: a.acct, typeTs: Date.now() }).catch(() => {});
   const why = {
     acctConf: Math.round(a.acctConf * 100),
-    hits: local(text).hits, examples: examples.length, creatorVotes: votedOn || undefined,
+    hits: local(text, ctx?.platform).hits, examples: examples.length, creatorVotes: votedOn || undefined,
     profile: ctx?.profile?.raw ? ctx.profile.raw.slice(0, 160) : undefined,
     reply: !!(ctx?.replyTo || ctx?.parent), quoted: !!ctx?.quoted,
     provider: a.provider
   };
   return {
-    base: a.score, rage: typeof a.rage === "number" ? a.rage : undefined, rageReason: a.rageReason || undefined, pattern: a.pattern, conf: Math.round(a.patConf * 100), cost: a.cost,
+    base: a.score, rage: typeof a.rage === "number" ? a.rage : undefined, rageReason: a.rageReason || undefined,
+    thirst: typeof a.thirst === "number" ? a.thirst : undefined, thirstReason: a.thirstReason || undefined, pattern: a.pattern, conf: Math.round(a.patConf * 100), cost: a.cost,
     acct: a.acct, acctConf: a.acctConf, adjOk: !!ctx?.handle, profiled: !!ctx?.profile?.raw,
     rules: a.matched, rulesSig: rules.join("|"), why
   };
@@ -596,7 +679,9 @@ function finishResult(a, text, ctx, { examples, votedOn, rules }) {
 // Chat-style providers (Anthropic, OpenAI-compatible incl. Ollama). Same context, JSON reply.
 async function callChat(text, ctx, cfg) {
   const { state, examples, votedOn, rules } = await buildContext(text, ctx);
-  const req = SD.providers.buildRequest(cfg, state, rules);
+  // Images only leave the browser when the reader has turned the vision option on.
+  const images = (await getThirstSettings()).vision ? ctx?.images || [] : [];
+  const req = SD.providers.buildRequest(cfg, state, rules, images);
   const res = await fetch(req.url, { method: "POST", headers: req.headers, body: req.body });
   if (!res.ok) {
     let msg = "";
@@ -609,7 +694,7 @@ async function callChat(text, ctx, cfg) {
   const data = await res.json();
   const parsed = SD.providers.parseReply(SD.providers.replyText(cfg.provider, data), rules.length);
   return finishResult({
-    score: parsed.score, rage: parsed.rage, rageReason: parsed.rageReason, pattern: parsed.pattern, patConf: parsed.patConf, acct: parsed.acct, acctConf: parsed.acctConf,
+    score: parsed.score, rage: parsed.rage, rageReason: parsed.rageReason, thirst: parsed.thirst, thirstReason: parsed.thirstReason, pattern: parsed.pattern, patConf: parsed.patConf, acct: parsed.acct, acctConf: parsed.acctConf,
     matched: parsed.matched.map((i) => rules[i]), cost: 0, provider: cfg.provider
   }, text, ctx, { examples, votedOn, rules });
 }
@@ -636,8 +721,8 @@ const providerReady = (cfg) => cfg.provider === "jev" ? !!cfg.apiKey : SD.provid
 const providerName = (cfg) => SD.providers.PROVIDER_DEFAULTS[cfg.provider].label;
 
 // A post the on-device classifier is confident about never reaches the LLM.
-function localConfident(text, key, reason) {
-  const { score, hits } = local(text);
+function localConfident(text, key, reason, platform) {
+  const { score, hits } = local(text, platform);
   const list = hits.length ? `: ${hits.slice(0, 3).join(", ")}` : "";
   const explanation = reason === "confident-slop" ? `Clear slop pattern${list}`
     : reason === "confident-ok" ? "Specific, personal voice (no slop signals)"
@@ -690,7 +775,7 @@ async function runJob({ key, text, ctx, resolve, reject }) {
     if (!providerReady(cfg)) throw Object.assign(new Error("No API key set"), { status: 401 });
     const r = cfg.provider === "jev" ? await callJev(text, ctx, cfg.apiKey) : await callChat(text, ctx, cfg);
     cache[key] = {
-      base: r.base, rage: r.rage, rageReason: r.rageReason, pattern: r.pattern, conf: r.conf, acct: r.acct, acctConf: r.acctConf, adjOk: r.adjOk,
+      base: r.base, rage: r.rage, rageReason: r.rageReason, thirst: r.thirst, thirstReason: r.thirstReason, pattern: r.pattern, conf: r.conf, acct: r.acct, acctConf: r.acctConf, adjOk: r.adjOk,
       profiled: r.profiled, rules: r.rules, rulesSig: r.rulesSig, why: r.why, ts: Date.now()
     };
     const shown = await present(cache[key], key);
@@ -733,9 +818,9 @@ async function analyzeInner({ text, ctx, refine }) {
   if (creator) return { ...creator, key };
   // Short posts are scored on-device only: too little text for the AI model to add much,
   // and it keeps every post markable by hand at no cost.
-  if (text.trim().length < SHORT_POST && !hit) {
+  if ((text.trim().length < SHORT_POST || ctx?.localOnly) && !hit) {
     if (!refine) bumpStat("tier0");
-    return localConfident(text, key, "local-only");
+    return localConfident(text, key, "local-only", ctx?.platform);
   }
   // A cached score is stale once your custom filters change, or when asked to refine.
   const sig = (await getRules()).join("|");
@@ -746,21 +831,23 @@ async function analyzeInner({ text, ctx, refine }) {
   const ready = providerReady(cfg);
   if (!ready) {
     setStatus({ ok: false, error: `Add your ${providerName(cfg)} key in settings. Using the local classifier only.` });
-    return localResult(text, key, "nokey");
+    return localResult(text, key, "nokey", ctx?.platform);
   }
   // Tier 0: the on-device classifier answers on its own when it is confident (or when
   // the reader chose local-only), so those posts never cost an API call.
   const tier = await getTier();
   const rs = await getRageSettings();
   const rageScore = SD.rage.localRage(text, { ageHours: ageHours(ctx?.postedAt) }, rageModel || undefined).score;
-  const rt = SD.router.route(local(text).score, { ...tier, llmReady: ready, rage: { on: rs.mode !== "off", score: rageScore } });
+  const ts = await getThirstSettings();
+  const thirstScore = SD.thirst.localThirst(text, ctx?.alt || "", thirstModel || undefined).score;
+  const rt = SD.router.route(local(text, ctx?.platform).score, { ...tier, llmReady: ready, rage: { on: rs.mode !== "off", score: rageScore }, thirst: { on: ts.mode !== "off", score: thirstScore } });
   if (rt.use === "local") {
     if (refine && keepHit) return present(keepHit, key);
     if (!refine) bumpStat("tier0");
-    return localConfident(text, key, rt.reason);
+    return localConfident(text, key, rt.reason, ctx?.platform);
   }
-  if (await overBudget()) return refine && keepHit ? present(keepHit, key) : localResult(text, key, "budget");
-  if (Date.now() < pausedUntil || queue.length >= QUEUE_MAX) return refine && keepHit ? present(keepHit, key) : localResult(text, key, "error");
+  if (await overBudget()) return refine && keepHit ? present(keepHit, key) : localResult(text, key, "budget", ctx?.platform);
+  if (Date.now() < pausedUntil || queue.length >= QUEUE_MAX) return refine && keepHit ? present(keepHit, key) : localResult(text, key, "error", ctx?.platform);
   if (!inflight.has(key)) {
     inflight.set(key, new Promise((resolve, reject) => {
       queue.push({ key, text, ctx, resolve, reject });
@@ -770,7 +857,7 @@ async function analyzeInner({ text, ctx, refine }) {
   try {
     return { ...(await inflight.get(key)), key };
   } catch {
-    return refine && keepHit ? present(keepHit, key) : localResult(text, key, "error");
+    return refine && keepHit ? present(keepHit, key) : localResult(text, key, "error", ctx?.platform);
   }
 }
 
@@ -781,7 +868,7 @@ function noteScore(score) {
 }
 
 async function analyze(m) {
-  const r = withRage(await analyzeInner(m), m);
+  const r = withThirst(withRage(await analyzeInner(m), m), m);
   if (!m.refine) {
     bumpStat("scanned");
     if (r.local) bumpStat("local");
@@ -841,7 +928,7 @@ async function clearAll({ votes }) {
   cache = {};
   clearTimeout(saveTimer);
   const rm = ["sdCache", "sdSpend", "sdSpendDay", "sdFiltered", "sdStats", "sdRecent", AUTHORS_KEY, PROFILES_KEY];
-  if (votes) { rm.push("sdRageVotes", "sdRageModel", "sdTaste"); rageFb = {}; rageModel = null; tasteFb = {}; interestLex = null; topicMap = SD.topics.topicPrefs([], topicManual); }
+  if (votes) { rm.push("sdRageVotes", "sdRageModel", "sdThirstVotes", "sdThirstModel", "sdTaste"); rageFb = {}; rageModel = null; thirstFb = {}; thirstModel = null; tasteFb = {}; interestLex = null; topicMap = SD.topics.topicPrefs([], topicManual); }
   if (votes) { rm.push("sdVotes", "sdModel"); model = null; }
   await chrome.storage.local.remove(rm);
   return {};

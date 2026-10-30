@@ -1,6 +1,6 @@
 # Heed
 
-A Chrome (Manifest V3) extension that lets **you** decide what deserves your attention on X. Tell it with a 👍 or 👎 what you liked and didn't; posts you'd rather not spend attention on, from slop and rage bait to whole topics you want less of, **fold into a one-line row**. They're still one hover away, they just cost you a glance instead of a read.
+A Chrome (Manifest V3) extension that lets **you** decide what deserves your attention on X and Instagram. Tell it with a 👍 or 👎 what you liked and didn't; posts you'd rather not spend attention on, from slop and rage bait to whole topics you want less of, **fold into a one-line row**. They're still one hover away, they just cost you a glance instead of a read.
 
 > It doesn't change what X serves you. It changes what costs *you* attention.
 > Scores are subjective content-quality judgements, not proof that a post was written by an AI; detectors for short social posts aren't reliable at that, so this one doesn't claim to do it.
@@ -18,6 +18,12 @@ A Chrome (Manifest V3) extension that lets **you** decide what deserves your att
 
 ### Rage bait
 Posts that exist only to provoke contempt or tribal anger and add nothing new ("X be like" mockery, sweeping claims about a group, rhetorical outrage questions). **News, announcements and fresh commentary that adds facts or an argument are left alone**, even when angry or political, and fresh posts with sources or numbers get extra benefit of the doubt. Folded as an orange *RAGE* row (or hidden, or off). Scored on-device (`src/lib/rage.ts`) and by the AI model, which is told explicitly not to flag topics, only emptiness.
+
+### Thirst traps
+Posts made to be looked at: a "rate me" ask, a teasing one-liner, an emoji-only caption next to a body. Folded as a pink *THIRST* row (or hidden, or off). Deliberately conservative: workout tutorials, sport, travel, fashion credits and ordinary selfies score low, and one weak signal never reaches the default line. Scored on-device (`src/lib/thirst.ts`: caption, hashtags, the photo's alt text) and by the AI model; an optional, off-by-default setting lets a vision-capable provider look at the image on uncertain posts. 👎 on a thirst-looking post trains it, 👍 on a folded one corrects it. Precedence: own 👍 > slop > rage > thirst > less.
+
+### Instagram
+The same verdicts, reactions and learning work in the Instagram home feed (`src/content/sites.js`). The slop classifier is told hashtags and emoji are normal there. Explore / profile grid thumbnails have no caption, so only an obvious thirst-trap image description blurs a thumbnail (until hovered). Instagram's markup is generated and changes often; the adapter relies on links, `<time>`, `<img alt>` and `span[dir=auto]`. Preview offline: `node tools/harness/instagram.mjs out.png`.
 
 ### Modes
 Fold (default) · Hide · Dim · Chip (score chip on slop only) · Scores (chip on every post, no filtering).

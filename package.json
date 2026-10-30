@@ -1,13 +1,13 @@
 {
   "name": "heed",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node tools/build.mjs",
     "train": "node tools/train.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test test/",
+    "test": "npm run build && node --test test/*.test.mjs",
     "eval": "node tools/eval.mjs --corpus",
     "icons": "node tools/icons.mjs",
     "bench": "node tools/bench.mjs",

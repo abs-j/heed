@@ -4,7 +4,7 @@
   // src/content/ui.ts
   var CSS = `
 :host { all: initial; position: absolute; inset: 0; z-index: 5; pointer-events: none; display: block;
-  --slop: var(--sd-slop, #f2545b); --rage: var(--sd-rage, #f0883e); --less: var(--sd-less, #8fa3c8); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
+  --slop: var(--sd-slop, #f2545b); --rage: var(--sd-rage, #f0883e); --thirst: var(--sd-thirst, #e0609e); --less: var(--sd-less, #8fa3c8); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
   font: 400 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", Inter, Roboto, sans-serif;
   color: var(--sd-fg, #0f1419); }
 * { box-sizing: border-box; }
@@ -89,8 +89,8 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
   var THUMB_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>';
   var THUMB_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>';
   var SVG_CHEVRON = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>';
-  var colorOf = (v) => v.state === "slop" ? "var(--slop)" : v.state === "rage" ? "var(--rage)" : v.state === "less" ? "var(--less)" : v.state === "border" ? "var(--warn)" : "var(--ok)";
-  var verdict = (v) => v.state === "slop" ? "SLOP" : v.state === "rage" ? "RAGE" : v.state === "less" ? "LESS" : v.state === "border" ? "UNSURE" : "OK";
+  var colorOf = (v) => v.state === "slop" ? "var(--slop)" : v.state === "rage" ? "var(--rage)" : v.state === "thirst" ? "var(--thirst)" : v.state === "less" ? "var(--less)" : v.state === "border" ? "var(--warn)" : "var(--ok)";
+  var verdict = (v) => v.state === "slop" ? "SLOP" : v.state === "rage" ? "RAGE" : v.state === "thirst" ? "THIRST" : v.state === "less" ? "LESS" : v.state === "border" ? "UNSURE" : "OK";
   function h(tag, cls, text) {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -136,7 +136,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       const strip = h("div", "strip");
       strip.setAttribute("role", "button");
       strip.tabIndex = 0;
-      strip.setAttribute("aria-label", `Folded post, ${v.state === "rage" ? "rage bait" : v.state === "less" ? "not for you" : "slop"} score ${v.score}. ${v.title}. Press Enter to peek.`);
+      strip.setAttribute("aria-label", `Folded post, ${v.state === "rage" ? "rage bait" : v.state === "thirst" ? "thirst trap" : v.state === "less" ? "not for you" : "slop"} score ${v.score}. ${v.title}. Press Enter to peek.`);
       strip.setAttribute("aria-expanded", String(open));
       const score = h("div", "score mono");
       const big = h("b", void 0, v.state === "less" ? "" : String(v.score));
@@ -165,7 +165,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       wrap.append(strip);
       const dock = h("div", "dock");
       const dot = btn("dot mono", v.state === "less" ? "less" : String(v.score), () => {
-      }, `Slop score ${v.score}. Click to see why. A quality score, not proof of AI generation.`);
+      }, v.state === "thirst" || v.state === "rage" ? `${verdict(v)} score ${v.score}. Click to see why.` : `Slop score ${v.score}. Click to see why. A quality score, not proof of AI generation.`);
       dot.addEventListener("click", (e) => act.toggleWhy(e.detail === 0));
       dot.setAttribute("aria-label", v.state === "less" ? "Why this post was folded" : `Slop score ${v.score} out of 100. Show why.`);
       dot.setAttribute("aria-haspopup", "dialog");
@@ -197,7 +197,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       why.tabIndex = -1;
       whyEl = why;
       why.append(
-        h("h4", void 0, `${v.state === "slop" ? "Slop" : v.state === "rage" ? "Rage bait" : v.state === "less" ? "Not for you" : v.state === "border" ? "Unsure" : "Looks fine"} \xB7 ${v.score}/100`),
+        h("h4", void 0, `${v.state === "slop" ? "Slop" : v.state === "rage" ? "Rage bait" : v.state === "thirst" ? "Thirst trap" : v.state === "less" ? "Not for you" : v.state === "border" ? "Unsure" : "Looks fine"} \xB7 ${v.score}/100`),
         h("p", "lead", `${v.title}. Margin: ${marginLabel(v)}.`)
       );
       const gauge = h("div", "gauge");
@@ -207,7 +207,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       thr.style.left = `${v.threshold}%`;
       gauge.append(thr, pin);
       const scale = h("div", "scale mono");
-      scale.append(h("span", void 0, "0 genuine"), h("span", void 0, `line ${v.threshold}`), h("span", void 0, "100 slop"));
+      scale.append(h("span", void 0, "0 genuine"), h("span", void 0, `line ${v.threshold}`), h("span", void 0, v.state === "thirst" ? "100 thirst trap" : v.state === "rage" ? "100 rage" : "100 slop"));
       if (v.state !== "less") why.append(gauge, scale);
       if (v.signals.length) {
         const sg = h("div", "sigs");
@@ -249,10 +249,147 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     };
   }
 
+  // src/content/sites.js
+  var xText = (a) => a.querySelector('[data-testid="tweetText"]')?.innerText.trim() || "";
+  var xHandle = (a) => {
+    const link = [...a.querySelector('[data-testid="User-Name"]')?.querySelectorAll("a") || []].find((n) => /^\/[A-Za-z0-9_]{1,15}$/.test(n.getAttribute("href") || ""));
+    return link ? link.getAttribute("href").slice(1) : void 0;
+  };
+  function xContext(a) {
+    const ctx = {};
+    const user = a.querySelector('[data-testid="User-Name"]');
+    if (user) {
+      const link = [...user.querySelectorAll("a")].find((n) => /^\/[A-Za-z0-9_]{1,15}$/.test(n.getAttribute("href") || ""));
+      if (link) ctx.handle = link.getAttribute("href").slice(1);
+      const name = user.querySelector("span")?.innerText.trim();
+      if (name) ctx.name = name.slice(0, 80);
+      ctx.verified = !!user.querySelector('[data-testid="icon-verified"]');
+    }
+    const posted = a.querySelector("time")?.getAttribute("datetime");
+    if (posted) ctx.postedAt = posted;
+    const statusHref = a.querySelector('a[href*="/status/"] time')?.closest("a")?.getAttribute("href") || "";
+    const pid = statusHref.match(/\/status\/(\d+)/);
+    if (pid) ctx.postId = pid[1];
+    const media = [];
+    const photos = a.querySelectorAll('[data-testid="tweetPhoto"] img');
+    if (photos.length) {
+      const alts = [...photos].map((i) => i.alt).filter((t) => t && !/^(image|embedded video)$/i.test(t));
+      media.push(`${photos.length} image${photos.length > 1 ? "s" : ""}` + (alts.length ? ` (alt text: ${alts.join(" | ").slice(0, 200)})` : ""));
+      if (alts.length) ctx.alt = alts.join(" | ").slice(0, 300);
+      const srcs = [...photos].map((i) => i.currentSrc || i.src).filter((u) => /^https:\/\/pbs\.twimg\.com\//.test(u));
+      if (srcs.length) ctx.images = srcs.slice(0, 2);
+    }
+    if (a.querySelector('[data-testid="videoPlayer"], video')) {
+      const dur = a.querySelector('[data-testid="videoPlayer"]')?.innerText.match(/\d+:\d{2}/)?.[0];
+      media.push("video" + (dur ? ` (${dur})` : ""));
+    }
+    const card = a.querySelector('[data-testid="card.wrapper"]');
+    if (card) media.push("link card: " + card.innerText.replace(/\s+/g, " ").slice(0, 160));
+    if (media.length) ctx.media = media;
+    const social = a.querySelector('[data-testid="socialContext"]')?.innerText.trim();
+    if (social) ctx.context = social.slice(0, 80);
+    const rm = a.innerText.match(/Replying to\s+((?:@\w+(?:,?\s+(?:and\s+)?)?)+)/i);
+    if (rm) {
+      ctx.replyTo = rm[1].trim().slice(0, 80);
+      const prev = a.closest('[data-testid="cellInnerDiv"]')?.previousElementSibling?.querySelector('article[data-testid="tweet"]');
+      const ph = prev && xHandle(prev);
+      if (ph && ctx.replyTo.toLowerCase().includes("@" + ph.toLowerCase())) ctx.parent = xText(prev).slice(0, 300);
+    }
+    const texts = a.querySelectorAll('[data-testid="tweetText"]');
+    if (texts.length > 1 && texts[1].closest('[role="link"]')) ctx.quoted = texts[1].innerText.trim().slice(0, 300);
+    return ctx;
+  }
+  var x = {
+    id: "x",
+    postSelector: 'article[data-testid="tweet"]',
+    minChars: 3,
+    threads: true,
+    // a folded thread opener also folds the author's follow-on posts
+    profiles: true,
+    // creator bios from X's hover cards
+    textOf: xText,
+    handleOf: xHandle,
+    contextOf: xContext,
+    hasContent: (a) => xText(a).length >= 3,
+    cellOf: (a) => a.closest('[data-testid="cellInnerDiv"]')
+  };
+  var IG_RESERVED = /^(?:explore|reels?|p|stories|direct|accounts|about|legal|developers|directory|web|challenge|emails|session|nametag|oauth|api|graphql|static)$/i;
+  var igUser = (href) => {
+    const m = (href || "").match(/^\/([A-Za-z0-9._]{1,30})\/$/);
+    return m && !IG_RESERVED.test(m[1]) ? m[1] : void 0;
+  };
+  var igHandle = (a) => {
+    for (const l of a.querySelectorAll("header a[href], a[href]")) {
+      const u = igUser(l.getAttribute("href"));
+      if (u) return u;
+    }
+    return void 0;
+  };
+  var igPhotos = (a) => [...a.querySelectorAll("img")].filter((i) => (i.naturalWidth || i.width || 0) >= 200 && !/profile picture/i.test(i.alt || ""));
+  function igCaption(a) {
+    const handle = igHandle(a);
+    let best = "";
+    for (const s of a.querySelectorAll('span[dir="auto"], h1')) {
+      if (s.closest("header, time, button, [role=button], a[href*='/liked_by/']")) continue;
+      let t = s.innerText.trim();
+      if (handle && t.toLowerCase().startsWith(handle.toLowerCase())) t = t.slice(handle.length).trim();
+      if (/^[\d.,\sKMB]+(?:likes?|views?|comments?|plays?)?$/i.test(t) || t === handle || t.length < 2) continue;
+      if (t.length > best.length) best = t;
+    }
+    return best.slice(0, 1500);
+  }
+  function igContext(a) {
+    const ctx = { platform: "instagram" };
+    const handle = igHandle(a);
+    if (handle) {
+      ctx.handle = handle;
+      ctx.name = handle;
+    }
+    ctx.verified = !!a.querySelector('svg[aria-label="Verified"]');
+    const posted = a.querySelector("time[datetime]")?.getAttribute("datetime");
+    if (posted) ctx.postedAt = posted;
+    const code = a.querySelector('a[href*="/p/"], a[href*="/reel/"]')?.getAttribute("href")?.match(/\/(?:p|reel)\/([\w-]+)/)?.[1];
+    if (code) ctx.postId = "ig_" + code;
+    const photos = igPhotos(a);
+    const alts = photos.map((i) => (i.alt || "").replace(/^Photo by [^.]*\.\s*/i, "").trim()).filter(Boolean);
+    const media = [];
+    if (photos.length) {
+      media.push(`${photos.length} image${photos.length > 1 ? "s" : ""}` + (alts.length ? ` (image description: ${alts.join(" | ").slice(0, 200)})` : ""));
+      if (alts.length) ctx.alt = alts.join(" | ").slice(0, 300);
+      const srcs = photos.map((i) => i.currentSrc || i.src).filter((u) => /^https:\/\//.test(u));
+      if (srcs.length) ctx.images = srcs.slice(0, 2);
+    }
+    if (a.querySelector("video")) media.push("video");
+    if (media.length) ctx.media = media;
+    return ctx;
+  }
+  var instagram = {
+    id: "instagram",
+    postSelector: "article",
+    minChars: 0,
+    threads: false,
+    profiles: false,
+    textOf: igCaption,
+    handleOf: igHandle,
+    contextOf: igContext,
+    // A photo post with no caption still has an image description worth scoring.
+    hasContent: (a) => igCaption(a).length > 0 || igPhotos(a).some((i) => i.alt),
+    cellOf: (a) => a,
+    // Explore and profile grids: bare thumbnails with an alt text, no caption. Scored on that alone.
+    tiles: () => [...document.querySelectorAll('a[href^="/p/"], a[href^="/reel/"]')].filter((t) => !t.closest("article") && t.querySelector("img[alt]")),
+    tileContext(t) {
+      const img = t.querySelector("img[alt]");
+      const alt = (img?.alt || "").replace(/^Photo by [^.]*\.\s*/i, "").trim();
+      const code = t.getAttribute("href").match(/\/(?:p|reel)\/([\w-]+)/)?.[1];
+      return { text: "", ctx: { platform: "instagram", postId: code ? "ig_" + code : void 0, alt, localOnly: true } };
+    }
+  };
+  var siteFor = (host) => /(^|\.)instagram\.com$/.test(host) ? instagram : x;
+
   // src/content/main.js
   (() => {
-    const MIN_CHARS = 3;
-    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, tasteMode: "fold" };
+    const site = siteFor(location.hostname);
+    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, thirstMode: "fold", thirstThreshold: 70, tasteMode: "fold" };
     const BORDER = [35, 75];
     const health = { articles: 0, handles: 0, probes: 0, probesOk: 0, noted: "" };
     function reportHealth() {
@@ -277,52 +414,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         }
       }
     }, { rootMargin: "300px" });
-    const textOf = (a) => a.querySelector('[data-testid="tweetText"]')?.innerText.trim() || "";
-    const handleOf = (a) => {
-      const link = [...a.querySelector('[data-testid="User-Name"]')?.querySelectorAll("a") || []].find((n) => /^\/[A-Za-z0-9_]{1,15}$/.test(n.getAttribute("href") || ""));
-      return link ? link.getAttribute("href").slice(1) : void 0;
-    };
-    function contextOf(a) {
-      const ctx = {};
-      const user = a.querySelector('[data-testid="User-Name"]');
-      if (user) {
-        const link = [...user.querySelectorAll("a")].find((n) => /^\/[A-Za-z0-9_]{1,15}$/.test(n.getAttribute("href") || ""));
-        if (link) ctx.handle = link.getAttribute("href").slice(1);
-        const name = user.querySelector("span")?.innerText.trim();
-        if (name) ctx.name = name.slice(0, 80);
-        ctx.verified = !!user.querySelector('[data-testid="icon-verified"]');
-      }
-      const posted = a.querySelector("time")?.getAttribute("datetime");
-      if (posted) ctx.postedAt = posted;
-      const statusHref = a.querySelector('a[href*="/status/"] time')?.closest("a")?.getAttribute("href") || "";
-      const pid = statusHref.match(/\/status\/(\d+)/);
-      if (pid) ctx.postId = pid[1];
-      const media = [];
-      const photos = a.querySelectorAll('[data-testid="tweetPhoto"] img');
-      if (photos.length) {
-        const alts = [...photos].map((i) => i.alt).filter((t) => t && !/^(image|embedded video)$/i.test(t));
-        media.push(`${photos.length} image${photos.length > 1 ? "s" : ""}` + (alts.length ? ` (alt text: ${alts.join(" | ").slice(0, 200)})` : ""));
-      }
-      if (a.querySelector('[data-testid="videoPlayer"], video')) {
-        const dur = a.querySelector('[data-testid="videoPlayer"]')?.innerText.match(/\d+:\d{2}/)?.[0];
-        media.push("video" + (dur ? ` (${dur})` : ""));
-      }
-      const card = a.querySelector('[data-testid="card.wrapper"]');
-      if (card) media.push("link card: " + card.innerText.replace(/\s+/g, " ").slice(0, 160));
-      if (media.length) ctx.media = media;
-      const social = a.querySelector('[data-testid="socialContext"]')?.innerText.trim();
-      if (social) ctx.context = social.slice(0, 80);
-      const rm = a.innerText.match(/Replying to\s+((?:@\w+(?:,?\s+(?:and\s+)?)?)+)/i);
-      if (rm) {
-        ctx.replyTo = rm[1].trim().slice(0, 80);
-        const prev = a.closest('[data-testid="cellInnerDiv"]')?.previousElementSibling?.querySelector('article[data-testid="tweet"]');
-        const ph = prev && handleOf(prev);
-        if (ph && ctx.replyTo.toLowerCase().includes("@" + ph.toLowerCase())) ctx.parent = textOf(prev).slice(0, 300);
-      }
-      const texts = a.querySelectorAll('[data-testid="tweetText"]');
-      if (texts.length > 1 && texts[1].closest('[role="link"]')) ctx.quoted = texts[1].innerText.trim().slice(0, 300);
-      return ctx;
-    }
+    const { textOf, handleOf, contextOf } = site;
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const profMem = /* @__PURE__ */ new Map();
     let probeChain = Promise.resolve();
@@ -414,7 +506,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     const RESERVED = /^\/(?:home|explore|notifications|messages|i|settings|search|compose|login|tos|privacy)(?:\/|$)/;
     let harvested = "";
     function harvestProfilePage() {
-      if (!settings.profiles || RESERVED.test(location.pathname)) return;
+      if (!site.profiles || !settings.profiles || RESERVED.test(location.pathname)) return;
       const m = location.pathname.match(/^\/([A-Za-z0-9_]{1,15})\/?$/);
       if (!m || harvested === m[1]) return;
       const bio = document.querySelector('[data-testid="UserDescription"]');
@@ -434,12 +526,39 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       });
     }
     function scan() {
-      document.querySelectorAll('article[data-testid="tweet"]').forEach((a) => {
+      document.querySelectorAll(site.postSelector).forEach((a) => {
         if (seen.has(a)) return;
-        if (textOf(a).length < MIN_CHARS) return;
+        if (!site.hasContent(a)) return;
         seen.add(a);
         io.observe(a);
       });
+      scanTiles();
+    }
+    const tileSeen = /* @__PURE__ */ new WeakSet();
+    function scanTiles() {
+      if (!site.tiles) return;
+      for (const t of site.tiles()) {
+        if (tileSeen.has(t)) continue;
+        tileSeen.add(t);
+        const { text, ctx } = site.tileContext(t);
+        if (!ctx.alt) continue;
+        ask(text, ctx, false).then((r) => {
+          if (!r || r.error || !t.isConnected) return;
+          t._sdTile = r;
+          paintTile(t);
+        });
+      }
+    }
+    function paintTile(t) {
+      const r = t._sdTile;
+      const on = r && settings.enabled && isThirst(r) && r.reaction !== "like";
+      if (on) {
+        t.setAttribute("data-sd-tile", settings.thirstMode === "hide" ? "hide" : "fold");
+        t.title = "Heed: " + thirstTitle(r);
+      } else {
+        t.removeAttribute("data-sd-tile");
+        if (t.title.startsWith("Heed:")) t.removeAttribute("title");
+      }
     }
     const scoreOf = (r) => typeof r.base === "number" && !r.fb && !r.local && !r.creator ? SD.finalScore(r.base, r.acct, r.acctConf, r.adjOk, settings.acctInfluence) : r.score;
     function accept(article, r, text) {
@@ -461,8 +580,8 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         return;
       }
       const text = textOf(article);
-      if (!text) return;
       const ctx = contextOf(article);
+      if (!text && !ctx.alt) return;
       health.articles++;
       if (ctx.handle) health.handles++;
       if (health.articles % 5 === 0) reportHealth();
@@ -513,19 +632,19 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       article._sdCard?.destroy();
       article._sdCard = null;
       article.removeAttribute("data-sd");
-      article.closest('[data-testid="cellInnerDiv"]')?.removeAttribute("data-sd-hidden");
+      site.cellOf(article)?.removeAttribute("data-sd-hidden");
       (article._sdFolded || []).forEach((c) => c.removeAttribute("data-sd-folded"));
       article._sdFolded = [];
     }
     const THREAD_RE = /(?:^|\s)1\s*\/\s*\d{1,2}\b|🧵|\bthread\b/i;
     function foldThread(article) {
       article._sdFolded = [];
-      if (!THREAD_RE.test(textOf(article))) return 0;
+      if (!site.threads || !THREAD_RE.test(textOf(article))) return 0;
       const handle = handleOf(article);
       if (!handle) return 0;
-      let cell = article.closest('[data-testid="cellInnerDiv"]')?.nextElementSibling;
+      let cell = site.cellOf(article)?.nextElementSibling;
       while (cell && article._sdFolded.length < 15) {
-        const a = cell.querySelector('article[data-testid="tweet"]');
+        const a = cell.querySelector(site.postSelector);
         if (!a || handleOf(a) !== handle) break;
         cell.setAttribute("data-sd-folded", "");
         article._sdFolded.push(cell);
@@ -537,6 +656,9 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     const isRage = (r) => rageActive() && typeof r.rage === "number" && r.rage >= settings.rageThreshold && !r.rageFb?.startsWith?.("not");
     const rageTitle = (r) => "Rage bait" + (r.rageReason ? `: ${r.rageReason}` : " \xB7 nothing new in this post");
     const keepRage = (r) => ({ rage: r.rage, rageSrc: r.rageSrc, rageHits: r.rageHits, rageNews: r.rageNews, rageReason: r.rageReason, rageFb: r.rageFb });
+    const thirstActive = () => settings.thirstMode !== "off" && settings.mode !== "scores";
+    const isThirst = (r) => thirstActive() && typeof r.thirst === "number" && r.thirst >= settings.thirstThreshold && !r.thirstFb?.startsWith?.("not");
+    const thirstTitle = (r) => "Thirst trap" + (r.thirstReason ? `: ${r.thirstReason}` : " \xB7 posted to be looked at");
     const tasteActive = () => settings.tasteMode !== "off" && settings.mode !== "scores";
     const topicLess = (r) => !r.reaction && !!r.topic?.less && !r.topic.more;
     const isLess = (r) => tasteActive() && (r.reaction === "dislike" || topicLess(r) || !r.reaction && typeof r.interest === "number" && r.interest >= 0.6);
@@ -562,7 +684,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
           return;
         }
         if (settings.mode === "hide") {
-          const cell = article.closest('[data-testid="cellInnerDiv"]');
+          const cell = site.cellOf(article);
           if (cell) {
             cell.setAttribute("data-sd-hidden", "");
             foldThread(article);
@@ -572,10 +694,24 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         }
         if (settings.mode === "dim") article.setAttribute("data-sd-dim", "");
       }
+      if (!slop && !liked && !isRage(r) && isThirst(r)) {
+        const entry = { ...r, score: r.thirst, explanation: thirstTitle(r) };
+        if (settings.thirstMode === "hide") {
+          const cell = site.cellOf(article);
+          if (cell) {
+            cell.setAttribute("data-sd-hidden", "");
+            logFiltered(article, entry);
+            return;
+          }
+        }
+        collapse(article, r, { wasCollapsed, wasOpen, fullHeight });
+        logFiltered(article, entry);
+        return;
+      }
       if (!slop && !liked && !isRage(r) && isLess(r)) {
         const entry = { ...r, score: Math.round(Math.abs(r.interest || 1) * 100), explanation: lessTitle(r) };
         if (settings.rageMode === "hide") {
-          const cell = article.closest('[data-testid="cellInnerDiv"]');
+          const cell = site.cellOf(article);
           if (cell) {
             cell.setAttribute("data-sd-hidden", "");
             logFiltered(article, entry);
@@ -588,7 +724,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       }
       if (!slop && !liked && isRage(r)) {
         if (settings.rageMode === "hide") {
-          const cell = article.closest('[data-testid="cellInnerDiv"]');
+          const cell = site.cellOf(article);
           if (cell) {
             cell.setAttribute("data-sd-hidden", "");
             logFiltered(article, { ...r, score: r.rage, explanation: rageTitle(r) });
@@ -601,18 +737,18 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       }
       mount(article, r, { strip: false, folded: 0 });
     }
-    const stateOf = (r, slop) => slop ? "slop" : r.reaction === "like" ? "ok" : isRage(r) ? "rage" : isLess(r) ? "less" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok";
+    const stateOf = (r, slop) => slop ? "slop" : r.reaction === "like" ? "ok" : isRage(r) ? "rage" : isThirst(r) ? "thirst" : isLess(r) ? "less" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok";
     function mount(article, r, { strip, folded }) {
       const slop = isSlop(r);
       const state = stateOf(r, slop);
       article.dataset.sd = state;
       article._sdCard = mountCard(article, {
         state,
-        score: state === "rage" ? r.rage : state === "less" ? Math.round(Math.abs(r.interest || 1) * 100) : r.score,
-        threshold: state === "rage" ? settings.rageThreshold : settings.sensitivity,
-        title: state === "rage" ? rageTitle(r) : state === "less" ? lessTitle(r) : r.explanation || "",
+        score: state === "rage" ? r.rage : state === "thirst" ? r.thirst : state === "less" ? Math.round(Math.abs(r.interest || 1) * 100) : r.score,
+        threshold: state === "rage" ? settings.rageThreshold : state === "thirst" ? settings.thirstThreshold : settings.sensitivity,
+        title: state === "rage" ? rageTitle(r) : state === "thirst" ? thirstTitle(r) : state === "less" ? lessTitle(r) : r.explanation || "",
         handle: strip ? handleOf(article) : void 0,
-        signals: state === "rage" ? r.rageHits || [] : state === "less" ? [topicLess(r) ? r.topic.label : "your taste"] : r.rules?.length ? r.rules : r.why?.hits || [],
+        signals: state === "rage" ? r.rageHits || [] : state === "thirst" ? r.thirstHits || [] : state === "less" ? [topicLess(r) ? r.topic.label : "your taste"] : r.rules?.length ? r.rules : r.why?.hits || [],
         details: detailsOf(r),
         folded,
         strip,
@@ -746,7 +882,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       });
     }
     async function react(article, r, label) {
-      const folded = [isSlop(r) && "slop", isRage(r) && "rage", isLess(r) && "less"].filter(Boolean);
+      const folded = [isSlop(r) && "slop", isRage(r) && "rage", isThirst(r) && "thirst", isLess(r) && "less"].filter(Boolean);
       const next = { ...r, reaction: label, interest: label === "like" ? -1 : 1 };
       if (label === "like") {
         if (folded.includes("slop")) next.fb = "not_slop";
@@ -754,11 +890,19 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
           next.rageFb = "not_rage";
           next.rage = 0;
         }
+        if (folded.includes("thirst")) {
+          next.thirstFb = "not_thirst";
+          next.thirst = 0;
+        }
       } else {
         if (r.score >= 50 && !folded.includes("slop")) next.fb = "slop";
         if ((r.rage || 0) >= 50 && !folded.includes("rage")) {
           next.rageFb = "rage";
           next.rage = 100;
+        }
+        if ((r.thirst || 0) >= 50 && !folded.includes("thirst")) {
+          next.thirstFb = "thirst";
+          next.thirst = 100;
         }
         article._sdKeepOpen = true;
       }
@@ -771,8 +915,10 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         text: r.text,
         label,
         handle: contextOf(article).handle,
+        alt: contextOf(article).alt,
         score: r.score,
         rage: r.rage || 0,
+        thirst: r.thirst || 0,
         folded
       }).catch(() => null);
       if (!res || res.error) {
@@ -787,7 +933,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       clearTimeout(refreshT);
       refreshT = setTimeout(async () => {
         for (const [a, r] of [...results]) {
-          if (!a.isConnected || !r.text || a.hasAttribute("data-sd-open") || a._sdKeepOpen) continue;
+          if (!a.isConnected || typeof r.text !== "string" || a.hasAttribute("data-sd-open") || a._sdKeepOpen) continue;
           const nr = await ask(r.text, contextOf(a), false);
           if (nr && !nr.error && a.isConnected) accept(a, nr, r.text);
         }
@@ -835,6 +981,10 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         line("Rage bait", `${r.rage}/100 (${who})` + (r.rageReason && r.rageSrc !== "you" ? `: ${r.rageReason}` : ""));
         if (r.rageNews >= 0.3) line("Novelty", "reads like reporting (sources, numbers or dates), so it is given the benefit of the doubt");
       }
+      if (thirstActive() && typeof r.thirst === "number") {
+        const who = r.thirstSrc === "you" ? "your vote" : r.thirstSrc === "model" ? "the AI model" : "on-device";
+        line("Thirst trap", `${r.thirst}/100 (${who})` + (r.thirstReason && r.thirstSrc !== "you" ? `: ${r.thirstReason}` : ""));
+      }
       if (w.profile) line("Profile read", w.profile);
       else if (!r.local && !r.creator && r.tier !== "local") line("Profile", "not available; judged from the post and handle");
       if (w.reply) line("Context", "judged as a reply");
@@ -853,6 +1003,9 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         r.score = scoreOf(r);
         render(a);
       }
+      document.querySelectorAll("[data-sd-tile], a[href^='/p/'], a[href^='/reel/']").forEach((t) => {
+        if (t._sdTile) paintTile(t);
+      });
       scan();
     }
     function applyTheme() {
@@ -867,13 +1020,13 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     }
     let hovered = null;
     addEventListener("pointerover", (e) => {
-      hovered = e.target.closest?.('article[data-testid="tweet"]') || null;
+      hovered = e.target.closest?.(site.postSelector) || null;
     }, { passive: true, capture: true });
     addEventListener("keydown", (e) => {
       if (!e.altKey || e.ctrlKey || e.metaKey) return;
       const t = e.target;
       if (t?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t?.tagName)) return;
-      const article = document.activeElement?.closest?.('article[data-testid="tweet"]') || (hovered?.isConnected ? hovered : null);
+      const article = document.activeElement?.closest?.(site.postSelector) || (hovered?.isConnected ? hovered : null);
       const r = article && results.get(article);
       if (!r) return;
       const k = e.code;
@@ -908,17 +1061,20 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       if (e.key === "Escape") closeWhyAndRefocus();
     }, true);
     async function init() {
-      const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "tasteMode"]);
+      const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "tasteMode"]);
+      if (["fold", "hide", "off"].includes(s.thirstMode)) settings.thirstMode = s.thirstMode;
+      if (typeof s.thirstThreshold === "number") settings.thirstThreshold = s.thirstThreshold;
       if (["fold", "off"].includes(s.tasteMode)) settings.tasteMode = s.tasteMode;
       if (["fold", "hide", "off"].includes(s.rageMode)) settings.rageMode = s.rageMode;
       if (typeof s.rageThreshold === "number") settings.rageThreshold = s.rageThreshold;
-      if (s.profiles !== void 0) settings.profiles = s.profiles;
+      if (s.profiles !== void 0) settings.profiles = site.profiles && s.profiles;
       if (typeof s.acctInfluence === "number") settings.acctInfluence = s.acctInfluence;
       if (s.enabled !== void 0) settings.enabled = s.enabled;
       if (MODES.includes(s.mode)) settings.mode = s.mode;
       if (typeof s.sensitivity === "number") settings.sensitivity = s.sensitivity;
       applyTheme();
       document.documentElement.dataset.sdVersion = chrome.runtime.getManifest().version;
+      document.documentElement.dataset.sdSite = site.id;
       scan();
       let t;
       let themeAt = 0;
@@ -956,11 +1112,19 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
           settings.tasteMode = ch.tasteMode.newValue;
           dirty = true;
         }
+        if (ch.thirstMode && ["fold", "hide", "off"].includes(ch.thirstMode.newValue)) {
+          settings.thirstMode = ch.thirstMode.newValue;
+          dirty = true;
+        }
+        if (ch.thirstThreshold) {
+          settings.thirstThreshold = Number(ch.thirstThreshold.newValue) || 70;
+          dirty = true;
+        }
         if (ch.rageThreshold) {
           settings.rageThreshold = Number(ch.rageThreshold.newValue) || 70;
           dirty = true;
         }
-        if (ch.profiles) settings.profiles = ch.profiles.newValue;
+        if (ch.profiles) settings.profiles = site.profiles && ch.profiles.newValue;
         if (ch.acctInfluence) {
           settings.acctInfluence = Number(ch.acctInfluence.newValue);
           dirty = true;

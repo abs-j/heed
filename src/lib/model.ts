@@ -12,12 +12,20 @@ const sigmoid = (z: number) => 1 / (1 + Math.exp(-z));
 
 export interface LocalResult { score: number; p: number; hits: string[] }
 
-export function localScore(text: string, weights: Weights = DEFAULT_WEIGHTS): LocalResult {
+// The weights are fit to X text, where hashtag blocks, emoji and exclamations mark engagement bait.
+// On Instagram they are how everyone writes, so they stop counting and very short captions (the
+// norm there) get a small allowance. Everything else (hooks, CTAs, platitudes) still applies.
+const PLATFORMS: Record<string, { mute: string[]; bias: number }> = {
+  instagram: { mute: ["hashtags", "emoji", "excl"], bias: -0.8 }
+};
+
+export function localScore(text: string, weights: Weights = DEFAULT_WEIGHTS, platform?: string): LocalResult {
   const x = extract(text);
-  let z = weights.bias;
+  const adj = platform ? PLATFORMS[platform] : undefined;
+  let z = weights.bias + (adj?.bias ?? 0);
   const contrib: [string, number][] = [];
   FEATURES.forEach((f, i) => {
-    const v = (weights.w[f.id] ?? f.prior) * x[i];
+    const v = adj?.mute.includes(f.id) ? 0 : (weights.w[f.id] ?? f.prior) * x[i];
     z += v;
     if (v > 0.35) contrib.push([f.label, v]);
   });

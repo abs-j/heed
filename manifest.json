@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Heed",
-  "version": "2.5.0",
-  "description": "Decide what deserves your attention on X. Thumbs up or down teaches it; slop, rage bait and topics you want less of fold away.",
+  "version": "2.6.0",
+  "description": "Decide what deserves your attention on X and Instagram. Slop, rage bait and thirst traps fold away; thumbs up or down teaches it.",
   "permissions": [
     "storage"
   ],
@@ -20,7 +20,8 @@
     {
       "matches": [
         "https://x.com/*",
-        "https://twitter.com/*"
+        "https://twitter.com/*",
+        "https://www.instagram.com/*"
       ],
       "js": [
         "lib.js",

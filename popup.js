@@ -6,12 +6,14 @@ const needsKey = (s) => (s.tierMode === "local" ? false
   : !s.provider || s.provider === "jev" ? !s.apiKey
   : !s.providerKeys?.[s.provider] && !/^https?:\/\/(localhost|127\.0\.0\.1)/.test(s.providerBase || ""));
 
-function setRage(v) {
-  document.querySelectorAll("#rage button").forEach((b) => {
+function setSeg(id, v) {
+  document.querySelectorAll(`#${id} button`).forEach((b) => {
     b.setAttribute("aria-checked", String(b.dataset.v === v));
     b.tabIndex = b.dataset.v === v ? 0 : -1;
   });
 }
+const setRage = (v) => setSeg("rage", v);
+const setThirst = (v) => setSeg("thirst", v);
 function setMode(v) {
   document.querySelectorAll("#mode button").forEach((b) => {
     b.setAttribute("aria-checked", String(b.dataset.v === v));
@@ -58,8 +60,9 @@ function drawSpark(stats) {
 }
 
 (async () => {
-  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "provider", "providerKeys", "providerBase", "tierMode", "sdStatus", "sdHealth", "sdStats", "sdRecent", "rageMode"]);
+  const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "apiKey", "provider", "providerKeys", "providerBase", "tierMode", "sdStatus", "sdHealth", "sdStats", "sdRecent", "rageMode", "thirstMode"]);
   setRage(["fold", "hide", "off"].includes(s.rageMode) ? s.rageMode : "fold");
+  setThirst(["fold", "hide", "off"].includes(s.thirstMode) ? s.thirstMode : "fold");
   $("enabled").checked = s.enabled ?? true;
   setMode(MODES.includes(s.mode) ? s.mode : "blur");
   const sens = s.sensitivity ?? 60;
@@ -106,19 +109,21 @@ $("mode").onkeydown = (e) => {
   next.click();
   next.focus();
 };
-$("rage").onclick = (e) => {
-  const b = e.target.closest("button[data-v]");
-  if (!b) return;
-  setRage(b.dataset.v);
-  chrome.storage.local.set({ rageMode: b.dataset.v });
-};
-$("rage").onkeydown = (e) => {
-  const keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
-  if (!(e.key in keys)) return;
-  const btns = [...document.querySelectorAll("#rage button")];
-  const i = btns.findIndex((b) => b.getAttribute("aria-checked") === "true");
-  const next = btns[(i + keys[e.key] + btns.length) % btns.length];
-  e.preventDefault(); next.click(); next.focus();
-};
+for (const [id, key, set] of [["rage", "rageMode", setRage], ["thirst", "thirstMode", setThirst]]) {
+  $(id).onclick = (e) => {
+    const b = e.target.closest("button[data-v]");
+    if (!b) return;
+    set(b.dataset.v);
+    chrome.storage.local.set({ [key]: b.dataset.v });
+  };
+  $(id).onkeydown = (e) => {
+    const keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+    if (!(e.key in keys)) return;
+    const btns = [...document.querySelectorAll(`#${id} button`)];
+    const i = btns.findIndex((b) => b.getAttribute("aria-checked") === "true");
+    const next = btns[(i + keys[e.key] + btns.length) % btns.length];
+    e.preventDefault(); next.click(); next.focus();
+  };
+}
 $("opts").onclick = (e) => { e.preventDefault(); chrome.runtime.openOptionsPage(); };
 $("hist").onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL("options.html#review") }); };

@@ -1,11 +1,12 @@
 // Content script: finds posts, requests scores, applies the filter mode.
 import { mountCard } from "./ui";
+import { siteFor } from "./sites";
 
 (() => {
+  const site = siteFor(location.hostname);
   // Any post with a little text gets a card so it can be marked by hand; the background
   // only sends posts of 40+ characters to an AI model (shorter ones are scored locally).
-  const MIN_CHARS = 3;
-  const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, tasteMode: "fold" };
+    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, thirstMode: "fold", thirstThreshold: 70, tasteMode: "fold" };
   // Only borderline posts get the (slower) creator-profile second pass.
   const BORDER = [35, 75];
 
@@ -31,60 +32,8 @@ import { mountCard } from "./ui";
     }
   }, { rootMargin: "300px" });
 
-  const textOf = (a) => a.querySelector('[data-testid="tweetText"]')?.innerText.trim() || "";
-
-  // Creator, media and feed context available in the timeline DOM. Bios are not
-  // shown there, so none is collected.
-  const handleOf = (a) => {
-    const link = [...(a.querySelector('[data-testid="User-Name"]')?.querySelectorAll("a") || [])]
-      .find((n) => /^\/[A-Za-z0-9_]{1,15}$/.test(n.getAttribute("href") || ""));
-    return link ? link.getAttribute("href").slice(1) : undefined;
-  };
-
-  function contextOf(a) {
-    const ctx = {};
-    const user = a.querySelector('[data-testid="User-Name"]');
-    if (user) {
-      const link = [...user.querySelectorAll("a")].find((n) => /^\/[A-Za-z0-9_]{1,15}$/.test(n.getAttribute("href") || ""));
-      if (link) ctx.handle = link.getAttribute("href").slice(1);
-      const name = user.querySelector("span")?.innerText.trim();
-      if (name) ctx.name = name.slice(0, 80);
-      ctx.verified = !!user.querySelector('[data-testid="icon-verified"]');
-    }
-    const posted = a.querySelector("time")?.getAttribute("datetime");
-    if (posted) ctx.postedAt = posted;
-    const statusHref = a.querySelector('a[href*="/status/"] time')?.closest("a")?.getAttribute("href") || "";
-    const pid = statusHref.match(/\/status\/(\d+)/);
-    if (pid) ctx.postId = pid[1];
-    const media = [];
-    const photos = a.querySelectorAll('[data-testid="tweetPhoto"] img');
-    if (photos.length) {
-      const alts = [...photos].map((i) => i.alt).filter((t) => t && !/^(image|embedded video)$/i.test(t));
-      media.push(`${photos.length} image${photos.length > 1 ? "s" : ""}` + (alts.length ? ` (alt text: ${alts.join(" | ").slice(0, 200)})` : ""));
-    }
-    if (a.querySelector('[data-testid="videoPlayer"], video')) {
-      const dur = a.querySelector('[data-testid="videoPlayer"]')?.innerText.match(/\d+:\d{2}/)?.[0];
-      media.push("video" + (dur ? ` (${dur})` : ""));
-    }
-    const card = a.querySelector('[data-testid="card.wrapper"]');
-    if (card) media.push("link card: " + card.innerText.replace(/\s+/g, " ").slice(0, 160));
-    if (media.length) ctx.media = media;
-    const social = a.querySelector('[data-testid="socialContext"]')?.innerText.trim();
-    if (social) ctx.context = social.slice(0, 80);
-
-    // Reply and quote context.
-    const rm = a.innerText.match(/Replying to\s+((?:@\w+(?:,?\s+(?:and\s+)?)?)+)/i);
-    if (rm) {
-      ctx.replyTo = rm[1].trim().slice(0, 80);
-      const prev = a.closest('[data-testid="cellInnerDiv"]')?.previousElementSibling
-        ?.querySelector('article[data-testid="tweet"]');
-      const ph = prev && handleOf(prev);
-      if (ph && ctx.replyTo.toLowerCase().includes("@" + ph.toLowerCase())) ctx.parent = textOf(prev).slice(0, 300);
-    }
-    const texts = a.querySelectorAll('[data-testid="tweetText"]');
-    if (texts.length > 1 && texts[1].closest('[role="link"]')) ctx.quoted = texts[1].innerText.trim().slice(0, 300);
-    return ctx;
-  }
+  // Post markup is site-specific; see sites.js.
+  const { textOf, handleOf, contextOf } = site;
 
 
   // ---- Creator profiles ------------------------------------------------------
@@ -176,7 +125,7 @@ import { mountCard } from "./ui";
   const RESERVED = /^\/(?:home|explore|notifications|messages|i|settings|search|compose|login|tos|privacy)(?:\/|$)/;
   let harvested = "";
   function harvestProfilePage() {
-    if (!settings.profiles || RESERVED.test(location.pathname)) return;
+    if (!site.profiles || !settings.profiles || RESERVED.test(location.pathname)) return;
     const m = location.pathname.match(/^\/([A-Za-z0-9_]{1,15})\/?$/);
     if (!m || harvested === m[1]) return;
     const bio = document.querySelector('[data-testid="UserDescription"]');
@@ -193,12 +142,37 @@ import { mountCard } from "./ui";
   }
 
   function scan() {
-    document.querySelectorAll('article[data-testid="tweet"]').forEach((a) => {
+    document.querySelectorAll(site.postSelector).forEach((a) => {
       if (seen.has(a)) return;
-      if (textOf(a).length < MIN_CHARS) return;
+      if (!site.hasContent(a)) return;
       seen.add(a);
       io.observe(a);
     });
+    scanTiles();
+  }
+
+  // Grid thumbnails (Instagram Explore) have no caption or card: only the image description is
+  // scored, on-device, and a thirst-trap thumbnail is blurred until hovered. No reactions here.
+  const tileSeen = new WeakSet();
+  function scanTiles() {
+    if (!site.tiles) return;
+    for (const t of site.tiles()) {
+      if (tileSeen.has(t)) continue;
+      tileSeen.add(t);
+      const { text, ctx } = site.tileContext(t);
+      if (!ctx.alt) continue;
+      ask(text, ctx, false).then((r) => {
+        if (!r || r.error || !t.isConnected) return;
+        t._sdTile = r;
+        paintTile(t);
+      });
+    }
+  }
+  function paintTile(t) {
+    const r = t._sdTile;
+    const on = r && settings.enabled && isThirst(r) && r.reaction !== "like";
+    if (on) { t.setAttribute("data-sd-tile", settings.thirstMode === "hide" ? "hide" : "fold"); t.title = "Heed: " + thirstTitle(r); }
+    else { t.removeAttribute("data-sd-tile"); if (t.title.startsWith("Heed:")) t.removeAttribute("title"); }
   }
 
   // Final score = raw model score + account-type nudge at the current influence.
@@ -220,8 +194,9 @@ import { mountCard } from "./ui";
   async function request(article) {
     if (!settings.enabled || !article.isConnected) { seen.delete(article); return; }
     const text = textOf(article);
-    if (!text) return;
     const ctx = contextOf(article);
+    // A photo post with no caption is still judged on its image description.
+    if (!text && !ctx.alt) return;
     health.articles++;
     if (ctx.handle) health.handles++;
     if (health.articles % 5 === 0) reportHealth();
@@ -269,7 +244,7 @@ import { mountCard } from "./ui";
     article._sdCard?.destroy();
     article._sdCard = null;
     article.removeAttribute("data-sd");
-    article.closest('[data-testid="cellInnerDiv"]')?.removeAttribute("data-sd-hidden");
+    site.cellOf(article)?.removeAttribute("data-sd-hidden");
     (article._sdFolded || []).forEach((c) => c.removeAttribute("data-sd-folded"));
     article._sdFolded = [];
   }
@@ -278,12 +253,12 @@ import { mountCard } from "./ui";
   const THREAD_RE = /(?:^|\s)1\s*\/\s*\d{1,2}\b|🧵|\bthread\b/i;
   function foldThread(article) {
     article._sdFolded = [];
-    if (!THREAD_RE.test(textOf(article))) return 0;
+    if (!site.threads || !THREAD_RE.test(textOf(article))) return 0;
     const handle = handleOf(article);
     if (!handle) return 0;
-    let cell = article.closest('[data-testid="cellInnerDiv"]')?.nextElementSibling;
+    let cell = site.cellOf(article)?.nextElementSibling;
     while (cell && article._sdFolded.length < 15) {
-      const a = cell.querySelector('article[data-testid="tweet"]');
+      const a = cell.querySelector(site.postSelector);
       if (!a || handleOf(a) !== handle) break;
       cell.setAttribute("data-sd-folded", "");
       article._sdFolded.push(cell);
@@ -297,6 +272,10 @@ import { mountCard } from "./ui";
   const isRage = (r) => rageActive() && typeof r.rage === "number" && r.rage >= settings.rageThreshold && !r.rageFb?.startsWith?.("not");
   const rageTitle = (r) => "Rage bait" + (r.rageReason ? `: ${r.rageReason}` : " · nothing new in this post");
   const keepRage = (r) => ({ rage: r.rage, rageSrc: r.rageSrc, rageHits: r.rageHits, rageNews: r.rageNews, rageReason: r.rageReason, rageFb: r.rageFb });
+  // Thirst traps are a third verdict (own 👍 exempts it; slop and rage take precedence).
+  const thirstActive = () => settings.thirstMode !== "off" && settings.mode !== "scores";
+  const isThirst = (r) => thirstActive() && typeof r.thirst === "number" && r.thirst >= settings.thirstThreshold && !r.thirstFb?.startsWith?.("not");
+  const thirstTitle = (r) => "Thirst trap" + (r.thirstReason ? `: ${r.thirstReason}` : " · posted to be looked at");
   // "Not for you": posts you 👎, and posts that closely resemble ones you did. A 👍 exempts a post from everything.
   const tasteActive = () => settings.tasteMode !== "off" && settings.mode !== "scores";
   const topicLess = (r) => !r.reaction && !!r.topic?.less && !r.topic.more;
@@ -326,15 +305,25 @@ import { mountCard } from "./ui";
         return;
       }
       if (settings.mode === "hide") {
-        const cell = article.closest('[data-testid="cellInnerDiv"]');
+        const cell = site.cellOf(article);
         if (cell) { cell.setAttribute("data-sd-hidden", ""); foldThread(article); logFiltered(article, r); return; }
       }
       if (settings.mode === "dim") article.setAttribute("data-sd-dim", "");
     }
+    if (!slop && !liked && !isRage(r) && isThirst(r)) {
+      const entry = { ...r, score: r.thirst, explanation: thirstTitle(r) };
+      if (settings.thirstMode === "hide") {
+        const cell = site.cellOf(article);
+        if (cell) { cell.setAttribute("data-sd-hidden", ""); logFiltered(article, entry); return; }
+      }
+      collapse(article, r, { wasCollapsed, wasOpen, fullHeight });
+      logFiltered(article, entry);
+      return;
+    }
     if (!slop && !liked && !isRage(r) && isLess(r)) {
       const entry = { ...r, score: Math.round(Math.abs(r.interest || 1) * 100), explanation: lessTitle(r) };
       if (settings.rageMode === "hide") {
-        const cell = article.closest('[data-testid="cellInnerDiv"]');
+        const cell = site.cellOf(article);
         if (cell) { cell.setAttribute("data-sd-hidden", ""); logFiltered(article, entry); return; }
       }
       collapse(article, r, { wasCollapsed, wasOpen, fullHeight });
@@ -343,7 +332,7 @@ import { mountCard } from "./ui";
     }
     if (!slop && !liked && isRage(r)) {
       if (settings.rageMode === "hide") {
-        const cell = article.closest('[data-testid="cellInnerDiv"]');
+        const cell = site.cellOf(article);
         if (cell) { cell.setAttribute("data-sd-hidden", ""); logFiltered(article, { ...r, score: r.rage, explanation: rageTitle(r) }); return; }
       }
       collapse(article, r, { wasCollapsed, wasOpen, fullHeight });
@@ -353,18 +342,18 @@ import { mountCard } from "./ui";
     mount(article, r, { strip: false, folded: 0 });
   }
 
-  const stateOf = (r, slop) => (slop ? "slop" : r.reaction === "like" ? "ok" : isRage(r) ? "rage" : isLess(r) ? "less" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok");
+  const stateOf = (r, slop) => (slop ? "slop" : r.reaction === "like" ? "ok" : isRage(r) ? "rage" : isThirst(r) ? "thirst" : isLess(r) ? "less" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok");
 
   function mount(article, r, { strip, folded }) {
     const slop = isSlop(r);
     const state = stateOf(r, slop);
     article.dataset.sd = state;
     article._sdCard = mountCard(article, {
-      state, score: state === "rage" ? r.rage : state === "less" ? Math.round(Math.abs(r.interest || 1) * 100) : r.score,
-      threshold: state === "rage" ? settings.rageThreshold : settings.sensitivity,
-      title: state === "rage" ? rageTitle(r) : state === "less" ? lessTitle(r) : r.explanation || "",
+      state, score: state === "rage" ? r.rage : state === "thirst" ? r.thirst : state === "less" ? Math.round(Math.abs(r.interest || 1) * 100) : r.score,
+      threshold: state === "rage" ? settings.rageThreshold : state === "thirst" ? settings.thirstThreshold : settings.sensitivity,
+      title: state === "rage" ? rageTitle(r) : state === "thirst" ? thirstTitle(r) : state === "less" ? lessTitle(r) : r.explanation || "",
       handle: strip ? handleOf(article) : undefined,
-      signals: state === "rage" ? (r.rageHits || []) : state === "less" ? [topicLess(r) ? r.topic.label : "your taste"] : r.rules?.length ? r.rules : (r.why?.hits || []),
+      signals: state === "rage" ? (r.rageHits || []) : state === "thirst" ? (r.thirstHits || []) : state === "less" ? [topicLess(r) ? r.topic.label : "your taste"] : r.rules?.length ? r.rules : (r.why?.hits || []),
       details: detailsOf(r), folded, strip,
       // Scores-only mode and badge mode keep the chip on screen; otherwise it appears on hover.
       chipAlways: settings.mode === "scores" || (settings.mode === "badge" && slop),
@@ -489,14 +478,16 @@ import { mountCard } from "./ui";
   // records it, teaches the slop / rage models when the post is (or looks like) one, and
   // reverts here if that fails.
   async function react(article, r, label) {
-    const folded = [isSlop(r) && "slop", isRage(r) && "rage", isLess(r) && "less"].filter(Boolean);
+    const folded = [isSlop(r) && "slop", isRage(r) && "rage", isThirst(r) && "thirst", isLess(r) && "less"].filter(Boolean);
     const next = { ...r, reaction: label, interest: label === "like" ? -1 : 1 };
     if (label === "like") {
       if (folded.includes("slop")) next.fb = "not_slop";
       if (folded.includes("rage")) { next.rageFb = "not_rage"; next.rage = 0; }
+      if (folded.includes("thirst")) { next.thirstFb = "not_thirst"; next.thirst = 0; }
     } else {
       if (r.score >= 50 && !folded.includes("slop")) next.fb = "slop";
       if ((r.rage || 0) >= 50 && !folded.includes("rage")) { next.rageFb = "rage"; next.rage = 100; }
+      if ((r.thirst || 0) >= 50 && !folded.includes("thirst")) { next.thirstFb = "thirst"; next.thirst = 100; }
       // Stay open until the pointer leaves, so the confirmation and Undo are visible.
       article._sdKeepOpen = true;
     }
@@ -505,7 +496,7 @@ import { mountCard } from "./ui";
     render(article);
     const res = await chrome.runtime.sendMessage({
       type: "react", key: r.key, text: r.text, label, handle: contextOf(article).handle,
-      score: r.score, rage: r.rage || 0, folded
+      alt: contextOf(article).alt, score: r.score, rage: r.rage || 0, thirst: r.thirst || 0, folded
     }).catch(() => null);
     if (!res || res.error) { results.set(article, r); render(article); return; }
     refreshSoon();
@@ -518,7 +509,7 @@ import { mountCard } from "./ui";
     clearTimeout(refreshT);
     refreshT = setTimeout(async () => {
       for (const [a, r] of [...results]) {
-        if (!a.isConnected || !r.text || a.hasAttribute("data-sd-open") || a._sdKeepOpen) continue;
+        if (!a.isConnected || typeof r.text !== "string" || a.hasAttribute("data-sd-open") || a._sdKeepOpen) continue;
         const nr = await ask(r.text, contextOf(a), false);
         if (nr && !nr.error && a.isConnected) accept(a, nr, r.text);
       }
@@ -567,6 +558,10 @@ import { mountCard } from "./ui";
       line("Rage bait", `${r.rage}/100 (${who})` + (r.rageReason && r.rageSrc !== "you" ? `: ${r.rageReason}` : ""));
       if (r.rageNews >= 0.3) line("Novelty", "reads like reporting (sources, numbers or dates), so it is given the benefit of the doubt");
     }
+    if (thirstActive() && typeof r.thirst === "number") {
+      const who = r.thirstSrc === "you" ? "your vote" : r.thirstSrc === "model" ? "the AI model" : "on-device";
+      line("Thirst trap", `${r.thirst}/100 (${who})` + (r.thirstReason && r.thirstSrc !== "you" ? `: ${r.thirstReason}` : ""));
+    }
     if (w.profile) line("Profile read", w.profile);
     else if (!r.local && !r.creator && r.tier !== "local") line("Profile", "not available; judged from the post and handle");
     if (w.reply) line("Context", "judged as a reply");
@@ -584,10 +579,11 @@ import { mountCard } from "./ui";
       r.score = scoreOf(r);
       render(a);
     }
+    document.querySelectorAll("[data-sd-tile], a[href^='/p/'], a[href^='/reel/']").forEach((t) => { if (t._sdTile) paintTile(t); });
     scan();
   }
 
-  // Match X's current theme (light / dim / lights out) from the page itself.
+  // Match the site's current theme (light / dim / lights out) from the page itself.
   function applyTheme() {
     const cs = getComputedStyle(document.body);
     const root = document.documentElement;
@@ -602,12 +598,12 @@ import { mountCard } from "./ui";
   // Alt+L liked, Alt+D didn't like, Alt+U undo, Alt+P peek, Alt+W why. Alt-chords because X
   // already owns the bare letter keys. Acts on the post under the pointer or with focus.
   let hovered = null;
-  addEventListener("pointerover", (e) => { hovered = e.target.closest?.('article[data-testid="tweet"]') || null; }, { passive: true, capture: true });
+  addEventListener("pointerover", (e) => { hovered = e.target.closest?.(site.postSelector) || null; }, { passive: true, capture: true });
   addEventListener("keydown", (e) => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return;
     const t = e.target;
     if (t?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t?.tagName)) return;
-    const article = (document.activeElement?.closest?.('article[data-testid="tweet"]')) || (hovered?.isConnected ? hovered : null);
+    const article = (document.activeElement?.closest?.(site.postSelector)) || (hovered?.isConnected ? hovered : null);
     const r = article && results.get(article);
     if (!r) return;
     const k = e.code;
@@ -637,11 +633,13 @@ import { mountCard } from "./ui";
   addEventListener("keydown", (e) => { if (e.key === "Escape") closeWhyAndRefocus(); }, true);
 
   async function init() {
-    const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "tasteMode"]);
+    const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "tasteMode"]);
+    if (["fold", "hide", "off"].includes(s.thirstMode)) settings.thirstMode = s.thirstMode;
+    if (typeof s.thirstThreshold === "number") settings.thirstThreshold = s.thirstThreshold;
     if (["fold", "off"].includes(s.tasteMode)) settings.tasteMode = s.tasteMode;
     if (["fold", "hide", "off"].includes(s.rageMode)) settings.rageMode = s.rageMode;
     if (typeof s.rageThreshold === "number") settings.rageThreshold = s.rageThreshold;
-    if (s.profiles !== undefined) settings.profiles = s.profiles;
+    if (s.profiles !== undefined) settings.profiles = site.profiles && s.profiles;
     if (typeof s.acctInfluence === "number") settings.acctInfluence = s.acctInfluence;
     if (s.enabled !== undefined) settings.enabled = s.enabled;
     if (MODES.includes(s.mode)) settings.mode = s.mode;
@@ -649,6 +647,7 @@ import { mountCard } from "./ui";
     applyTheme();
     // Lets you (and tooling) confirm from the page which build is actually injected.
     document.documentElement.dataset.sdVersion = chrome.runtime.getManifest().version;
+    document.documentElement.dataset.sdSite = site.id;
     scan();
     let t;
     // Theme is re-read at most every few seconds: reading computed style forces a style recalc.
@@ -669,8 +668,10 @@ import { mountCard } from "./ui";
       if (ch.sensitivity) { settings.sensitivity = ch.sensitivity.newValue; dirty = true; }
       if (ch.rageMode && ["fold", "hide", "off"].includes(ch.rageMode.newValue)) { settings.rageMode = ch.rageMode.newValue; dirty = true; }
       if (ch.tasteMode && ["fold", "off"].includes(ch.tasteMode.newValue)) { settings.tasteMode = ch.tasteMode.newValue; dirty = true; }
+      if (ch.thirstMode && ["fold", "hide", "off"].includes(ch.thirstMode.newValue)) { settings.thirstMode = ch.thirstMode.newValue; dirty = true; }
+      if (ch.thirstThreshold) { settings.thirstThreshold = Number(ch.thirstThreshold.newValue) || 70; dirty = true; }
       if (ch.rageThreshold) { settings.rageThreshold = Number(ch.rageThreshold.newValue) || 70; dirty = true; }
-      if (ch.profiles) settings.profiles = ch.profiles.newValue;
+      if (ch.profiles) settings.profiles = site.profiles && ch.profiles.newValue;
       if (ch.acctInfluence) { settings.acctInfluence = Number(ch.acctInfluence.newValue); dirty = true; }
       if (dirty) {
         document.querySelectorAll("[data-sd-revealed]").forEach((n) => { delete n.dataset.sdRevealed; delete n.dataset.sdPeek; });

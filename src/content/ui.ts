@@ -5,7 +5,7 @@
 //   why    - a popover with the score gauge and every signal behind the number
 // Fine posts get a card with a dock only, so by default they look untouched.
 
-export type PostState = "slop" | "rage" | "less" | "border" | "ok";
+export type PostState = "slop" | "rage" | "thirst" | "less" | "border" | "ok";
 
 export interface View {
   state: PostState;
@@ -33,7 +33,7 @@ export interface Card { host: HTMLElement; setOpen(open: boolean): void; focusPa
 
 const CSS = `
 :host { all: initial; position: absolute; inset: 0; z-index: 5; pointer-events: none; display: block;
-  --slop: var(--sd-slop, #f2545b); --rage: var(--sd-rage, #f0883e); --less: var(--sd-less, #8fa3c8); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
+  --slop: var(--sd-slop, #f2545b); --rage: var(--sd-rage, #f0883e); --thirst: var(--sd-thirst, #e0609e); --less: var(--sd-less, #8fa3c8); --warn: var(--sd-warn, #eeb23a); --ok: var(--sd-ok, #2fb67c);
   font: 400 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", Inter, Roboto, sans-serif;
   color: var(--sd-fg, #0f1419); }
 * { box-sizing: border-box; }
@@ -120,8 +120,8 @@ const THUMB_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const THUMB_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>';
 const SVG_CHEVRON = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>';
 
-const colorOf = (v: View) => (v.state === "slop" ? "var(--slop)" : v.state === "rage" ? "var(--rage)" : v.state === "less" ? "var(--less)" : v.state === "border" ? "var(--warn)" : "var(--ok)");
-const verdict = (v: View) => (v.state === "slop" ? "SLOP" : v.state === "rage" ? "RAGE" : v.state === "less" ? "LESS" : v.state === "border" ? "UNSURE" : "OK");
+const colorOf = (v: View) => (v.state === "slop" ? "var(--slop)" : v.state === "rage" ? "var(--rage)" : v.state === "thirst" ? "var(--thirst)" : v.state === "less" ? "var(--less)" : v.state === "border" ? "var(--warn)" : "var(--ok)");
+const verdict = (v: View) => (v.state === "slop" ? "SLOP" : v.state === "rage" ? "RAGE" : v.state === "thirst" ? "THIRST" : v.state === "less" ? "LESS" : v.state === "border" ? "UNSURE" : "OK");
 
 function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const n = document.createElement(tag);
@@ -172,7 +172,7 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
     const strip = h("div", "strip");
     strip.setAttribute("role", "button");
     strip.tabIndex = 0;
-    strip.setAttribute("aria-label", `Folded post, ${v.state === "rage" ? "rage bait" : v.state === "less" ? "not for you" : "slop"} score ${v.score}. ${v.title}. Press Enter to peek.`);
+    strip.setAttribute("aria-label", `Folded post, ${v.state === "rage" ? "rage bait" : v.state === "thirst" ? "thirst trap" : v.state === "less" ? "not for you" : "slop"} score ${v.score}. ${v.title}. Press Enter to peek.`);
     strip.setAttribute("aria-expanded", String(open));
     const score = h("div", "score mono");
     const big = h("b", undefined, v.state === "less" ? "" : String(v.score));
@@ -192,7 +192,7 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
 
     // Dock
     const dock = h("div", "dock");
-    const dot = btn("dot mono", v.state === "less" ? "less" : String(v.score), () => {}, `Slop score ${v.score}. Click to see why. A quality score, not proof of AI generation.`);
+    const dot = btn("dot mono", v.state === "less" ? "less" : String(v.score), () => {}, v.state === "thirst" || v.state === "rage" ? `${verdict(v)} score ${v.score}. Click to see why.` : `Slop score ${v.score}. Click to see why. A quality score, not proof of AI generation.`);
     dot.addEventListener("click", (e) => act.toggleWhy(e.detail === 0));
     dot.setAttribute("aria-label", v.state === "less" ? "Why this post was folded" : `Slop score ${v.score} out of 100. Show why.`);
     dot.setAttribute("aria-haspopup", "dialog");
@@ -220,13 +220,13 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
     why.setAttribute("aria-label", "Why this score");
     why.tabIndex = -1;
     whyEl = why;
-    why.append(h("h4", undefined, `${v.state === "slop" ? "Slop" : v.state === "rage" ? "Rage bait" : v.state === "less" ? "Not for you" : v.state === "border" ? "Unsure" : "Looks fine"} · ${v.score}/100`),
+    why.append(h("h4", undefined, `${v.state === "slop" ? "Slop" : v.state === "rage" ? "Rage bait" : v.state === "thirst" ? "Thirst trap" : v.state === "less" ? "Not for you" : v.state === "border" ? "Unsure" : "Looks fine"} · ${v.score}/100`),
       h("p", "lead", `${v.title}. Margin: ${marginLabel(v)}.`));
     const gauge = h("div", "gauge");
     const pin = h("div", "pin"); pin.style.left = `${v.score}%`;
     const thr = h("div", "thr"); thr.style.left = `${v.threshold}%`;
     gauge.append(thr, pin);
-    const scale = h("div", "scale mono"); scale.append(h("span", undefined, "0 genuine"), h("span", undefined, `line ${v.threshold}`), h("span", undefined, "100 slop"));
+    const scale = h("div", "scale mono"); scale.append(h("span", undefined, "0 genuine"), h("span", undefined, `line ${v.threshold}`), h("span", undefined, v.state === "thirst" ? "100 thirst trap" : v.state === "rage" ? "100 rage" : "100 slop"));
     if (v.state !== "less") why.append(gauge, scale);
     if (v.signals.length) { const sg = h("div", "sigs"); for (const s of v.signals) sg.append(h("span", "chip", s)); why.append(sg); }
     const rows = h("dl", "rows");

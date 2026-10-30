@@ -131,3 +131,64 @@ test("👎 on news twice makes news fold as a topic; a later 👍 brings it back
   await send({ type: "unreact", key: a1.key });
   assert.equal((await send({ type: "analyze", text: N1, ctx: { postId: "t1" } })).reaction, undefined);
 });
+
+const TEASE = "Rate me 1-10 😏 be honest";
+const ALT = "May be an image of 1 person, bikini and beach";
+const reply = (o) => anth({ slop: 45, pattern: "low_effort", account_type: "personal_individual", account_confidence: 0.9, pattern_confidence: 0.6, ...o });
+
+test("thirst: scored on-device with no key, and the model's answer is used when asked", async () => {
+  calls.length = 0;
+  const offline = boot({}, ok({}));
+  const a = await offline({ type: "analyze", text: TEASE, ctx: { platform: "instagram", postId: "ig_a", alt: ALT } });
+  assert.ok(a.thirst >= 70 && a.thirstSrc === "local", `local thirst ${a.thirst}`);
+  assert.ok(a.thirstHits.length);
+  const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" } }, reply({ thirst: 12, thirst_reason: "ordinary selfie" }));
+  const b = await send({ type: "analyze", text: "Rate my brunch 1-10, honestly thoughts? maybe", ctx: { platform: "instagram", postId: "ig_b" } });
+  assert.equal(calls.length, 1);
+  const sent = JSON.parse(calls[0][1].body);
+  assert.match(sent.messages[0].content, /Instagram post/);
+  assert.equal(b.thirst, 12); assert.equal(b.thirstSrc, "model"); assert.equal(b.thirstReason, "ordinary selfie");
+});
+
+test("thirst: images go to the provider only with the vision option on, never to a local server", async () => {
+  const img = ["https://scontent.cdninstagram.com/a.jpg"];
+  for (const [store, expectImage] of [[{}, false], [{ thirstVision: true }, true]]) {
+    calls.length = 0;
+    const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" }, ...store }, reply({ thirst: 80 }));
+    await send({ type: "analyze", text: "Rate my brunch 1-10, honestly thoughts? maybe", ctx: { platform: "instagram", postId: "ig_c" + expectImage, images: img } });
+    const content = JSON.parse(calls[0][1].body).messages[0].content;
+    assert.equal(Array.isArray(content) && content.some((p) => p.type === "image" && p.source.url === img[0]), expectImage);
+  }
+  calls.length = 0;
+  const local = boot({ provider: "openai", providerBase: "http://localhost:11434/v1/chat/completions", tierMode: "llm", thirstVision: true }, ok({ choices: [{ message: { content: JSON.stringify({ slop: 40, thirst: 20 }) } }] }));
+  await local({ type: "analyze", text: "Rate my brunch 1-10, honestly thoughts? maybe", ctx: { platform: "instagram", postId: "ig_d", images: img } });
+  assert.equal(typeof JSON.parse(calls[0][1].body).messages[1].content, "string");
+});
+
+test("thirst: 👎 on a thirsty post teaches it, 👍 on a folded one corrects it, undo clears both", async () => {
+  const store = {};
+  const send = boot(store, ok({}));
+  const k1 = (await send({ type: "analyze", text: TEASE, ctx: { postId: "k1", alt: ALT } })).key;
+  const k2 = (await send({ type: "analyze", text: TEASE, ctx: { postId: "k2", alt: ALT } })).key;
+  const m = { type: "react", key: k1, text: TEASE, handle: "x", score: 10, rage: 0, thirst: 80, alt: ALT, folded: [] };
+  await send({ ...m, label: "dislike" });
+  assert.equal(store.sdThirstVotes[0].label, "thirst");
+  await send({ ...m, key: k2, label: "like", thirst: 90, folded: ["thirst"] });
+  assert.equal(store.sdThirstVotes.find((v) => v.key === k2).label, "not_thirst");
+  const again = await send({ type: "analyze", text: TEASE, ctx: { postId: "k2", alt: ALT } });
+  assert.equal(again.thirst, 0); assert.equal(again.thirstSrc, "you");
+  await send({ type: "unreact", key: k2 });
+  assert.equal(store.sdThirstVotes.some((v) => v.key === k2), false);
+});
+
+test("Instagram: grid thumbnails (localOnly) and platform captions are scored without calling the model", async () => {
+  calls.length = 0;
+  const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" } }, reply({ thirst: 5 }));
+  // A thumbnail has no caption, so swimwear in the image description alone is a weak signal: it is
+  // scored locally (no call) but stays under the default line, and an explicit bait ask in it crosses.
+  const t = await send({ type: "analyze", text: "", ctx: { platform: "instagram", postId: "ig_tile", alt: "May be an image of 1 person, bikini and beach", localOnly: true } });
+  assert.equal(calls.length, 0);
+  assert.ok(t.thirst >= 30 && t.thirst < 70, `thumbnail thirst ${t.thirst}`);
+  const c = await boot({}, ok({}))({ type: "analyze", text: "Golden hour ✨ #photography #sunset #travel #nature", ctx: { platform: "instagram", postId: "ig_cap" } });
+  assert.ok(c.score < 40, `caption slop ${c.score}`);
+});

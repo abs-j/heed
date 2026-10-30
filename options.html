@@ -63,6 +63,23 @@
           <small class="mute">Lower folds more. Mark posts <b>Rage bait</b> or <b>Not rage bait</b> in the hover bar (Alt+R) to teach it what you mean.</small>
         </label>
       </div>
+      <div class="card">
+        <h2>Thirst traps</h2>
+        <p class="mute">Posts made to be looked at: a "rate me" ask, a teasing one-liner, an emoji-only caption next to a body. Workout tutorials, sport, travel, fashion credits and ordinary selfies are left alone. Works on X and Instagram; on Instagram the photo's own description counts, since the picture carries most of the signal.</p>
+        <label class="field"><span>Thirst-trap posts</span>
+          <select id="thirstMode">
+            <option value="fold">Fold into a one-line summary (default)</option>
+            <option value="hide">Hide completely</option>
+            <option value="off">Don't filter</option>
+          </select>
+        </label>
+        <label class="field"><span>Strictness: fold posts scoring ≥ <b id="tv" class="mono"></b></span>
+          <input type="range" id="thirstThreshold" min="50" max="95" step="5">
+          <small class="mute">Lower folds more. A 👎 on a post that looks like one teaches it; a 👍 on a folded one corrects it.</small>
+        </label>
+        <label class="row"><span>Let the AI model look at the picture<small class="mute">Off by default. When on, image links of uncertain posts are sent to your AI provider (Anthropic or OpenAI-compatible; not Jev, not a local server) so it can see the image. Costs more per post.</small></span>
+          <span class="switch"><input type="checkbox" id="thirstVision"><i></i></span></label>
+      </div>
     </section>
 
     <section id="detection" data-section hidden>
