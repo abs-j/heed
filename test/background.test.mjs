@@ -15,7 +15,7 @@ function boot(store, fetchImpl) {
     runtime: { onMessage: { addListener: (f) => { listener = f; } }, onInstalled: { addListener() {} } }
   };
   const ctx = vm.createContext({
-    chrome, fetch: fetchImpl, console, crypto: globalThis.crypto, TextEncoder, setTimeout, clearTimeout, Date, Promise,
+    chrome, fetch: fetchImpl, AbortSignal, console, crypto: globalThis.crypto, TextEncoder, setTimeout, clearTimeout, Date, Promise,
     importScripts: (f) => vm.runInContext(readFileSync(new URL("../" + f, import.meta.url), "utf8"), ctx)
   });
   vm.runInContext(readFileSync(new URL("../background.js", import.meta.url), "utf8"), ctx);
@@ -238,4 +238,11 @@ test("suggested accounts: the model is told, and the prompt asks for a stricter 
   const body = JSON.parse(calls[0][1].body);
   assert.match(body.messages[0].content, /suggested_account/);
   assert.match(body.system, /suggested_account is true/);
+});
+
+test("provider requests carry a timeout signal so a hung call cannot hold a queue slot", async () => {
+  calls.length = 0;
+  const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" }, tierMode: "llm" }, reply({ slop: 50 }));
+  await send({ type: "analyze", text: "A reasonably long post that the model has to look at properly, thoughts?", ctx: { postId: "t1" } });
+  assert.ok(calls[0][1].signal instanceof AbortSignal);
 });

@@ -5,7 +5,9 @@ const MODEL = "typesafe/jev-1.13";
 const CACHE_KEY = "sdCache";
 const CACHE_MAX = 3000;
 const CACHE_TTL = 30 * 24 * 3600 * 1000;
-const MAX_CONCURRENT = 4;
+const MAX_CONCURRENT = 6;
+// A request that has not answered by now is dropped so it cannot hold one of the slots.
+const REQUEST_TIMEOUT_MS = 12000;
 
 const PATTERNS = {
   engagement_farming: "Engagement farming",
@@ -685,7 +687,7 @@ async function callChat(text, ctx, cfg) {
   // Images only leave the browser when the reader has turned the vision option on.
   const images = (await getThirstSettings()).vision ? [...(ctx?.images || []), ...(ctx?.frame ? [ctx.frame] : [])] : [];
   const req = SD.providers.buildRequest(cfg, state, rules, images);
-  const res = await fetch(req.url, { method: "POST", headers: req.headers, body: req.body });
+  const res = await fetch(req.url, { method: "POST", headers: req.headers, body: req.body, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (!res.ok) {
     let msg = "";
     try { const j = await res.json(); msg = j?.error?.message || j?.error || ""; } catch {}
@@ -794,7 +796,7 @@ async function runJob({ key, text, ctx, resolve, reject }) {
     if (st === 401 || st === 403) setStatus({ ok: false, error: `Invalid or missing API key for ${who}.` });
     else if (st === 402) setStatus({ ok: false, error: `${who} credits exhausted.` });
     else if (st === 429) {
-      pausedUntil = Date.now() + Math.max(15000, e.retryAfter * 1000);
+      pausedUntil = Date.now() + Math.max(4000, e.retryAfter * 1000);
       setStatus({ ok: false, error: `Rate limited by ${who}; pausing briefly.` });
     } else setStatus({ ok: false, error: `Request failed: ${e.message}` });
     if (st === 401 || st === 402 || st === 403) pausedUntil = Date.now() + 60000;
