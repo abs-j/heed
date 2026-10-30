@@ -81,3 +81,16 @@ test("router: with the picture option on, a harmless caption doesn't stop an ima
   assert.equal(SD.router.route(5, { ...o, thirst: { on: true, score: 9, vision: false } }).use, "local");
   assert.equal(SD.router.route(5, { ...o, thirst: { on: true, score: 95, vision: true } }).use, "local");
 });
+
+import { ALT_CORPUS } from "./thirst-alt-corpus.mjs";
+test("alt text: dressed-up posed women clear a suggested-post bar, ordinary posts do not", () => {
+  const SUGGESTED_BAR = 55;   // thirstThreshold 70 minus the suggested boost of 15
+  const scored = ALT_CORPUS.map((x) => ({ ...x, s: SD.thirst.localThirst(x.cap, x.alt).score }));
+  const flagged = scored.filter((x) => x.s >= SUGGESTED_BAR);
+  assert.ok(flagged.every((x) => x.dressed), "no ordinary post reaches the bar: " + JSON.stringify(flagged.filter((x) => !x.dressed)));
+  assert.ok(flagged.length >= 4, "catches the posts whose alt text names a dress, skirt or makeup");
+  // Alt text with a dress and a person is confident enough to settle without the model.
+  assert.ok(scored.some((x) => x.s >= 85 && x.dressed));
+  // A wedding photo with a dress in the alt text stays low.
+  assert.ok(scored.find((x) => /wedding/.test(x.cap)).s < 30);
+});

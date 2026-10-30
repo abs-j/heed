@@ -33,6 +33,16 @@ export const THIRST_FEATURES: ThirstFeature[] = [
   { id: "attire", label: "swimwear / underwear mentioned", prior: 0.9, fn: re(new RegExp(`\\b(?:${ATTIRE})\\b`, "gi"), 2) },
   { id: "alt", label: "photo shows swimwear / little clothing", prior: 1.5,
     fn: (c) => sat(count(c.alt, new RegExp(`\\b(?:${ATTIRE}|bare skin|midriff)\\b`, "gi")), 1) },
+  // Instagram's own image description lists clothing and looks ("one or more people, makeup, dress
+  // and text"). A dress or skirt next to a bare caption is the dressed-up-for-the-camera post.
+  { id: "altdress", label: "photo shows a dress, skirt or glam outfit", prior: 2.0,
+    fn: (c) => sat(count(c.alt, /\b(?:dress|gown|slip|miniskirt|skirt|sundress|chemise|corset|bodycon|fishnet|stockings|heels|crop top|bodysuit|jumpsuit|halter|sequins?|negligee|bralette)\b/gi), 1) },
+  { id: "altglam", label: "photo shows makeup or styled hair", prior: 0.8,
+    fn: (c) => sat(count(c.alt, /\b(?:makeup|lipstick|long hair|blonde hair|dark hair|curly hair|eyelashes|earrings|necklace|selfie)\b/gi), 1) },
+  { id: "altperson", label: "photo of a person", prior: 0.5,
+    fn: (c) => (/\b(?:person|people)\b/i.test(c.alt) ? 1 : 0) },
+  { id: "altnight", label: "night-out photo", prior: 0.4,
+    fn: (c) => (/\b(?:night|nightclub)\b/i.test(c.alt) ? 1 : 0) },
   { id: "bare", label: "almost no caption", prior: 1.0,
     fn: (c) => (c.alt && c.words.filter((w) => !w.startsWith("#")).length <= 4 ? 1 : 0) },
 
@@ -40,7 +50,7 @@ export const THIRST_FEATURES: ThirstFeature[] = [
   { id: "howto", label: "how-to or training content", prior: -1.6,
     fn: re(/\b(?:workout|exercise|reps?|sets?|routine|tutorial|how to|tips?|form|technique|stretch(?:ing)?|mobility|recipe|ingredients|macros|protein|programme|program|training plan|rehab|physio|coach(?:ing)?)\b/gi, 2) },
   { id: "event", label: "sport, event or news context", prior: -1.5,
-    fn: re(/\b(?:swim (?:meet|team|club|race|lessons?)|olympics?|championships?|tournament|medal|race|marathon|triathlon|lifeguard|according to|announced|breaking|study|research|surgery|cancer|awareness|fundraiser|charity)\b/gi, 2) },
+    fn: re(/\b(?:wedding|bride|groom|graduation|prom|ceremony|congratulations|swim (?:meet|team|club|race|lessons?)|olympics?|championships?|tournament|medal|race|marathon|triathlon|lifeguard|according to|announced|breaking|study|research|surgery|cancer|awareness|fundraiser|charity)\b/gi, 2) },
   { id: "craft", label: "photo or fashion credit", prior: -0.9,
     fn: re(/\b(?:photograph(?:er|y)|shot by|photo by|styled by|wardrobe|collection|campaign|editorial|runway|lookbook|designer|brand|ad\b|sponsored|#ad\b)\b/gi, 2) },
   { id: "travel", label: "travel or place", prior: -0.8,
