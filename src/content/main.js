@@ -185,6 +185,7 @@ import { siteFor } from "./sites";
     r.text = text;
     r.score = scoreOf(r);
     results.set(article, r);
+    article.removeAttribute("data-sd-pending");
     render(article);
   }
 
@@ -193,7 +194,16 @@ import { siteFor } from "./sites";
     catch { return { error: "ext" }; }
   }
 
+  // Posts that will be checked stay invisible (still taking their space, so nothing jumps) until
+  // the verdict is in, so a fold is already in place when the reader scrolls to them. A slow or
+  // failed check shows the post after PENDING_MAX_MS rather than leaving a hole.
+  const PENDING_MAX_MS = 8000;
   async function request(article) {
+    try { await requestInner(article); }
+    finally { article.removeAttribute("data-sd-pending"); }
+  }
+
+  async function requestInner(article) {
     if (!settings.enabled || !article.isConnected) { seen.delete(article); return; }
     const text = textOf(article);
     const ctx = contextOf(article);
@@ -201,6 +211,10 @@ import { siteFor } from "./sites";
     if (ctx.followed && settings.igShowFollowed) { article.dataset.sd = "ok"; return; }
     // A photo post with no caption is still judged on its image description.
     if (!text && !ctx.alt && !article.querySelector("video")) return;
+    if (site.holdUntilChecked) {
+      article.setAttribute("data-sd-pending", "");
+      setTimeout(() => article.removeAttribute("data-sd-pending"), PENDING_MAX_MS);
+    }
     if (site.frameOf && settings.thirstVision && !ctx.images?.length) {
       const f = await site.frameOf(article);
       if (f) ctx.frame = f;

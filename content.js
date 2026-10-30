@@ -404,6 +404,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     handleOf: igHandle,
     contextOf: igContext,
     frameOf: igFrame,
+    holdUntilChecked: true,
     // A photo post with no caption still has an image description worth scoring.
     hasContent: (a) => igCaption(a).length > 0 || igPhotos(a).some((i) => i.alt) || !!a.querySelector("video"),
     cellOf: (a) => a,
@@ -598,6 +599,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       r.text = text;
       r.score = scoreOf(r);
       results.set(article, r);
+      article.removeAttribute("data-sd-pending");
       render(article);
     }
     async function ask(text, ctx, refine) {
@@ -607,7 +609,15 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         return { error: "ext" };
       }
     }
+    const PENDING_MAX_MS = 8e3;
     async function request(article) {
+      try {
+        await requestInner(article);
+      } finally {
+        article.removeAttribute("data-sd-pending");
+      }
+    }
+    async function requestInner(article) {
       if (!settings.enabled || !article.isConnected) {
         seen.delete(article);
         return;
@@ -619,6 +629,10 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         return;
       }
       if (!text && !ctx.alt && !article.querySelector("video")) return;
+      if (site.holdUntilChecked) {
+        article.setAttribute("data-sd-pending", "");
+        setTimeout(() => article.removeAttribute("data-sd-pending"), PENDING_MAX_MS);
+      }
       if (site.frameOf && settings.thirstVision && !ctx.images?.length) {
         const f = await site.frameOf(article);
         if (f) ctx.frame = f;

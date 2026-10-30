@@ -50,3 +50,6 @@ a[data-sd-tile] img { filter: blur(22px) saturate(.6); transition: filter .2s ea
 a[data-sd-tile]:hover img, a[data-sd-tile]:focus-visible img { filter: none; }
 a[data-sd-tile="hide"] { display: none !important; }
 @media (prefers-reduced-motion: reduce) { a[data-sd-tile] img { transition: none !important; } }
+
+/* Instagram posts waiting for their verdict keep their space but are not shown (see PENDING_MAX_MS). */
+article[data-sd-pending] { visibility: hidden; }

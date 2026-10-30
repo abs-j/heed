@@ -168,6 +168,7 @@ const instagram = {
   handleOf: igHandle,
   contextOf: igContext,
   frameOf: igFrame,
+  holdUntilChecked: true,
   // A photo post with no caption still has an image description worth scoring.
   hasContent: (a) => igCaption(a).length > 0 || igPhotos(a).some((i) => i.alt) || !!a.querySelector("video"),
   cellOf: (a) => a,
