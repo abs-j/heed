@@ -145,7 +145,7 @@ async function igFrame(a) {
   const v = [...a.querySelectorAll("video")].find((x) => x.getBoundingClientRect().height > 0) || a.querySelector("video");
   if (!v) return undefined;
   if (v.readyState < 2) {
-    await new Promise((res) => { const t = setTimeout(res, 2500); v.addEventListener("loadeddata", () => { clearTimeout(t); res(); }, { once: true }); });
+    await new Promise((res) => { const t = setTimeout(res, 1500); v.addEventListener("loadeddata", () => { clearTimeout(t); res(); }, { once: true }); });
   }
   if (v.readyState < 2 || !v.videoWidth) return undefined;
   try {

@@ -374,7 +374,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     if (!v) return void 0;
     if (v.readyState < 2) {
       await new Promise((res) => {
-        const t = setTimeout(res, 2500);
+        const t = setTimeout(res, 1500);
         v.addEventListener("loadeddata", () => {
           clearTimeout(t);
           res();
