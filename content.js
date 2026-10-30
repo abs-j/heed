@@ -559,11 +559,19 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       chrome.runtime.sendMessage({ type: "saveProfile", handle: m[1], profile: prof }).catch(() => {
       });
     }
+    function hold(article) {
+      if (!site.holdUntilChecked || article.hasAttribute("data-sd") || article.hasAttribute("data-sd-pending")) return;
+      if (article.getBoundingClientRect().top < innerHeight) return;
+      article.setAttribute("data-sd-pending", "");
+      setTimeout(() => article.removeAttribute("data-sd-pending"), PENDING_MAX_MS);
+    }
     function scan() {
       document.querySelectorAll(site.postSelector).forEach((a) => {
         if (seen.has(a)) return;
         if (!site.hasContent(a)) return;
         seen.add(a);
+        const c = site.holdUntilChecked && contextOf(a);
+        if (c && !(c.followed && settings.igShowFollowed)) hold(a);
         io.observe(a);
       });
       scanTiles();
@@ -629,10 +637,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         return;
       }
       if (!text && !ctx.alt && !article.querySelector("video")) return;
-      if (site.holdUntilChecked) {
-        article.setAttribute("data-sd-pending", "");
-        setTimeout(() => article.removeAttribute("data-sd-pending"), PENDING_MAX_MS);
-      }
+      hold(article);
       if (site.frameOf && settings.thirstVision && !ctx.images?.length) {
         const f = await site.frameOf(article);
         if (f) ctx.frame = f;

@@ -51,5 +51,6 @@ a[data-sd-tile]:hover img, a[data-sd-tile]:focus-visible img { filter: none; }
 a[data-sd-tile="hide"] { display: none !important; }
 @media (prefers-reduced-motion: reduce) { a[data-sd-tile] img { transition: none !important; } }
 
-/* Instagram posts waiting for their verdict keep their space but are not shown (see PENDING_MAX_MS). */
-article[data-sd-pending] { visibility: hidden; }
+/* Instagram posts waiting for their verdict stay in place but blurred and dimmed, so a wait reads as
+   "loading" rather than as a hole in the feed (see PENDING_MAX_MS). */
+article[data-sd-pending] { filter: blur(22px) brightness(0.55); pointer-events: none; }
