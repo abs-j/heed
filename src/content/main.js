@@ -196,7 +196,25 @@ import { siteFor } from "./sites";
     r.score = scoreOf(r);
     results.set(article, r);
     article.removeAttribute("data-sd-pending");
+    // A fold above the viewport shifts everything below it. During a fast scroll that is what makes
+    // the page shake, so folds of posts the reader has already passed wait for the scroll to settle.
+    if (site.holdUntilChecked && Date.now() - lastScroll < SCROLL_IDLE_MS && article.getBoundingClientRect().top < 0) {
+      deferred.add(article);
+      clearTimeout(flushTimer);
+      flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS);
+      return;
+    }
     render(article);
+  }
+
+  const SCROLL_IDLE_MS = 220;
+  const deferred = new Set();
+  let flushTimer = 0;
+  function flushDeferred() {
+    if (Date.now() - lastScroll < SCROLL_IDLE_MS) { flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS); return; }
+    const batch = [...deferred];
+    deferred.clear();
+    for (const a of batch) if (a.isConnected && results.has(a)) render(a);
   }
 
   async function ask(text, ctx, refine) {
@@ -411,7 +429,9 @@ import { siteFor } from "./sites";
 
   function collapse(article, r, { wasCollapsed, wasOpen, fullHeight }) {
     // Start the transition from the post's current height so it glides shut.
-    const animate = !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
+    // Never on Instagram: its posts arrive blurred from the hold, and a gliding height change
+    // while the reader scrolls moves the page under them.
+    const animate = !site.holdUntilChecked && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
     if (animate) article.style.maxHeight = fullHeight + "px";
     article.setAttribute("data-sd-fold", "");
     mount(article, r, { strip: true, folded: foldThread(article) });

@@ -607,7 +607,25 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       r.score = scoreOf(r);
       results.set(article, r);
       article.removeAttribute("data-sd-pending");
+      if (site.holdUntilChecked && Date.now() - lastScroll < SCROLL_IDLE_MS && article.getBoundingClientRect().top < 0) {
+        deferred.add(article);
+        clearTimeout(flushTimer);
+        flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS);
+        return;
+      }
       render(article);
+    }
+    const SCROLL_IDLE_MS = 220;
+    const deferred = /* @__PURE__ */ new Set();
+    let flushTimer = 0;
+    function flushDeferred() {
+      if (Date.now() - lastScroll < SCROLL_IDLE_MS) {
+        flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS);
+        return;
+      }
+      const batch = [...deferred];
+      deferred.clear();
+      for (const a of batch) if (a.isConnected && results.has(a)) render(a);
     }
     async function ask(text, ctx, refine) {
       try {
@@ -838,7 +856,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       lastScroll = Date.now();
     }, { passive: true, capture: true });
     function collapse(article, r, { wasCollapsed, wasOpen, fullHeight }) {
-      const animate = !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
+      const animate = !site.holdUntilChecked && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
       if (animate) article.style.maxHeight = fullHeight + "px";
       article.setAttribute("data-sd-fold", "");
       mount(article, r, { strip: true, folded: foldThread(article) });
