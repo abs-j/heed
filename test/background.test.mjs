@@ -206,3 +206,36 @@ test("thirst vision: a harmless caption on an image post still goes to the model
   const on = await run({ thirstVision: true });
   assert.equal(on.n, 1); assert.equal(on.r.thirst, 80);
 });
+
+test("video frame: a data-URL frame reaches the model as a base64 image, only with the vision option on", async () => {
+  const frame = "data:image/jpeg;base64," + "A".repeat(2000);
+  for (const [store, expectImage] of [[{ tierMode: "llm" }, false], [{ tierMode: "llm", thirstVision: true }, true]]) {
+    calls.length = 0;
+    const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" }, ...store }, reply({ thirst: 70 }));
+    await send({ type: "analyze", text: "", ctx: { platform: "instagram", postId: "ig_f" + expectImage, frame } });
+    const content = calls[0] && JSON.parse(calls[0][1].body).messages[0].content;
+    const img = Array.isArray(content) && content.find((p) => p.type === "image");
+    assert.equal(!!img, expectImage);
+    if (img) { assert.equal(img.source.type, "base64"); assert.equal(img.source.data, "A".repeat(2000)); }
+  }
+});
+
+test("creator rules: wildcard trust beats a slop verdict and thirst, exact match still wins", async () => {
+  calls.length = 0;
+  const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" }, sdCreators: { "*basketball*": "trust", "santacruz*": "trust", "monashmemes_": "trust", "bad*": "mute" } }, reply({ slop: 95, thirst: 90 }));
+  for (const h of ["melbourne.basketball", "santacruz_nba", "monashmemes_"]) {
+    const r = await send({ type: "analyze", text: "w", ctx: { platform: "instagram", postId: "ig_" + h, handle: h } });
+    assert.equal(r.pattern, "creator_trusted", h); assert.equal(r.score, 0); assert.equal(r.thirst, 0);
+  }
+  assert.equal((await send({ type: "analyze", text: "x", ctx: { platform: "instagram", postId: "ig_m", handle: "badguy" } })).pattern, "creator_muted");
+  assert.equal(calls.length, 0, "creator rules never call the model");
+});
+
+test("suggested accounts: the model is told, and the prompt asks for a stricter thirst call", async () => {
+  calls.length = 0;
+  const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" }, tierMode: "llm" }, reply({ thirst: 70 }));
+  await send({ type: "analyze", text: "Sunday reset, new fit, honestly thoughts on this one? maybe", ctx: { platform: "instagram", postId: "ig_s", suggested: true } });
+  const body = JSON.parse(calls[0][1].body);
+  assert.match(body.messages[0].content, /suggested_account/);
+  assert.match(body.system, /suggested_account is true/);
+});

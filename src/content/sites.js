@@ -113,6 +113,8 @@ function igContext(a) {
   const handle = igHandle(a);
   if (handle) { ctx.handle = handle; ctx.name = handle; }
   ctx.verified = !!a.querySelector('svg[aria-label="Verified"]');
+  // "Suggested for you" sits under the name of accounts the reader does not follow.
+  if (/^Suggested for you$/m.test((a.innerText || "").slice(0, 400))) ctx.suggested = true;
   const posted = a.querySelector("time[datetime]")?.getAttribute("datetime");
   if (posted) ctx.postedAt = posted;
   const code = a.querySelector('a[href*="/p/"], a[href*="/reel/"]')?.getAttribute("href")?.match(/\/(?:p|reel)\/([\w-]+)/)?.[1];
@@ -131,6 +133,26 @@ function igContext(a) {
   return ctx;
 }
 
+// A video post has no image URL, only a blob: stream, which is same-origin and so can be drawn to a
+// canvas. Grab the current frame, downscaled, as a JPEG data URL for the model. Waits a moment for
+// the first frame when the player has not decoded one yet.
+async function igFrame(a) {
+  const v = [...a.querySelectorAll("video")].find((x) => x.getBoundingClientRect().height > 0) || a.querySelector("video");
+  if (!v) return undefined;
+  if (v.readyState < 2) {
+    await new Promise((res) => { const t = setTimeout(res, 2500); v.addEventListener("loadeddata", () => { clearTimeout(t); res(); }, { once: true }); });
+  }
+  if (v.readyState < 2 || !v.videoWidth) return undefined;
+  try {
+    const w = 384, h = Math.round((v.videoHeight / v.videoWidth) * w) || w;
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    c.getContext("2d").drawImage(v, 0, 0, w, h);
+    const url = c.toDataURL("image/jpeg", 0.6);
+    return url.length > 1000 ? url : undefined;
+  } catch { return undefined; }   // tainted or unreadable: the post is scored without a picture
+}
+
 const instagram = {
   id: "instagram",
   postSelector: "article",
@@ -140,8 +162,9 @@ const instagram = {
   textOf: igCaption,
   handleOf: igHandle,
   contextOf: igContext,
+  frameOf: igFrame,
   // A photo post with no caption still has an image description worth scoring.
-  hasContent: (a) => igCaption(a).length > 0 || igPhotos(a).some((i) => i.alt),
+  hasContent: (a) => igCaption(a).length > 0 || igPhotos(a).some((i) => i.alt) || !!a.querySelector("video"),
   cellOf: (a) => a,
   // Explore and profile grids: bare thumbnails with an alt text, no caption. Scored on that alone.
   tiles: () => [...document.querySelectorAll('a[href^="/p/"], a[href^="/reel/"]')]

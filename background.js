@@ -5,7 +5,7 @@ const MODEL = "typesafe/jev-1.13";
 const CACHE_KEY = "sdCache";
 const CACHE_MAX = 3000;
 const CACHE_TTL = 30 * 24 * 3600 * 1000;
-const MAX_CONCURRENT = 2;
+const MAX_CONCURRENT = 4;
 
 const PATTERNS = {
   engagement_farming: "Engagement farming",
@@ -303,7 +303,9 @@ async function creatorOverride(handle) {
   if (!handle) return null;
   const h = handle.toLowerCase();
   const { sdCreators = {}, sdVotes = [] } = await chrome.storage.local.get(["sdCreators", "sdVotes"]);
-  const manual = sdCreators[h];
+  // Exact handle first, then wildcard rules such as "*basketball*" or "santacruz*".
+  const manual = sdCreators[h] ?? Object.entries(sdCreators).find(([k, v]) => k.includes("*") && (v === "trust" || v === "mute")
+    && new RegExp("^" + k.toLowerCase().replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$").test(h))?.[1];
   if (manual === "mute") return { score: 100, pattern: "creator_muted", conf: 100, creator: true, explanation: `You always collapse @${handle}` };
   if (manual === "trust") return { score: 0, pattern: "creator_trusted", conf: 100, creator: true, explanation: `You always show @${handle}` };
   const mine = sdVotes.filter((v) => v.handle && v.handle.toLowerCase() === h);
@@ -519,6 +521,7 @@ async function buildContext(text, ctx) {
   const state = {
     platform: ctx?.platform === "instagram" ? "Instagram post" : "X (Twitter) post",
     post: text.slice(0, 1500),
+    ...(ctx?.suggested ? { suggested_account: true } : {}),
     ...(ctx?.handle || ctx?.name ? {
       creator: {
         ...(ctx.name ? { display_name: ctx.name } : {}),
@@ -680,7 +683,7 @@ function finishResult(a, text, ctx, { examples, votedOn, rules }) {
 async function callChat(text, ctx, cfg) {
   const { state, examples, votedOn, rules } = await buildContext(text, ctx);
   // Images only leave the browser when the reader has turned the vision option on.
-  const images = (await getThirstSettings()).vision ? ctx?.images || [] : [];
+  const images = (await getThirstSettings()).vision ? [...(ctx?.images || []), ...(ctx?.frame ? [ctx.frame] : [])] : [];
   const req = SD.providers.buildRequest(cfg, state, rules, images);
   const res = await fetch(req.url, { method: "POST", headers: req.headers, body: req.body });
   if (!res.ok) {
@@ -760,7 +763,7 @@ async function present(entry, key) {
 
 function pump() {
   while (active < MAX_CONCURRENT && queue.length && Date.now() >= pausedUntil) {
-    const job = queue.shift();
+    const job = queue.pop();   // newest first: it is the post the reader is looking at
     active++;
     runJob(job).finally(() => { active--; pump(); });
   }
@@ -803,7 +806,7 @@ async function runJob({ key, text, ctx, resolve, reject }) {
 
 // True when the reader lets the model see pictures and this post has one the provider can fetch.
 async function visionFor(ctx) {
-  if (!ctx?.images?.length || ctx.localOnly) return false;
+  if (!(ctx?.images?.length || ctx?.frame) || ctx.localOnly) return false;
   const [ts, cfg] = await Promise.all([getThirstSettings(), getProviderConfig()]);
   return ts.mode !== "off" && ts.vision && cfg.provider !== "jev" && !isLocalUrl(cfg.baseUrl);
 }
@@ -856,6 +859,8 @@ async function analyzeInner({ text, ctx, refine }) {
     return localConfident(text, key, rt.reason, ctx?.platform);
   }
   if (await overBudget()) return refine && keepHit ? present(keepHit, key) : localResult(text, key, "budget", ctx?.platform);
+  // A full queue drops its oldest job (a post long scrolled past) rather than the one on screen.
+  if (queue.length >= QUEUE_MAX && !refine) queue.shift()?.reject(new Error("queue full"));
   if (Date.now() < pausedUntil || queue.length >= QUEUE_MAX) return refine && keepHit ? present(keepHit, key) : localResult(text, key, "error", ctx?.platform);
   if (!inflight.has(key)) {
     inflight.set(key, new Promise((resolve, reject) => {

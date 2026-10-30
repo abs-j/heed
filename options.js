@@ -173,7 +173,7 @@ async function renderCreators() {
 }
 async function setCreator(handle, rule) {
   const h = String(handle).trim().replace(/^@/, "").toLowerCase();
-  if (!/^[a-z0-9_]{1,15}$/.test(h)) return false;
+  if (!/^[a-z0-9_.*]{1,30}$/.test(h)) return false;
   const { sdCreators = {} } = await chrome.storage.local.get("sdCreators");
   sdCreators[h] = rule;
   await chrome.storage.local.set({ sdCreators });
@@ -349,7 +349,7 @@ $("importFile").addEventListener("change", async (ev) => {
     }
     const creators = { ...(cur.sdCreators || {}) };
     for (const [h, r] of Object.entries(d.creators || {})) {
-      if (/^[a-z0-9_]{1,15}$/.test(h) && (r === "mute" || r === "trust")) creators[h] = r;
+      if (/^[a-z0-9_.*]{1,30}$/.test(h) && (r === "mute" || r === "trust")) creators[h] = r;
     }
     const set = {
       sdVotes: [...byKey.values()].sort((a, b) => a.ts - b.ts).slice(-500),

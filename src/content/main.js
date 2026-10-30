@@ -6,7 +6,7 @@ import { siteFor } from "./sites";
   const site = siteFor(location.hostname);
   // Any post with a little text gets a card so it can be marked by hand; the background
   // only sends posts of 40+ characters to an AI model (shorter ones are scored locally).
-    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, thirstMode: "fold", thirstThreshold: 70, tasteMode: "fold" };
+    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, thirstMode: "fold", thirstThreshold: 70, thirstVision: false, tasteMode: "fold" };
   // Only borderline posts get the (slower) creator-profile second pass.
   const BORDER = [35, 75];
 
@@ -23,6 +23,8 @@ import { siteFor } from "./sites";
       chrome.storage.local.set({ sdHealth: msg ? { msg, ts: Date.now() } : null }).catch(() => {});
     }
   }
+  // Posts from accounts the reader does not follow fold at a lower thirst score.
+  const SUGGESTED_BOOST = 15;
   const results = new Map();   // article -> result
   const seen = new WeakSet();
   const MODES = ["blur", "hide", "dim", "badge", "scores"];
@@ -30,7 +32,7 @@ import { siteFor } from "./sites";
     for (const e of entries) {
       if (e.isIntersecting) { io.unobserve(e.target); request(e.target); }
     }
-  }, { rootMargin: "300px" });
+  }, { rootMargin: "1200px" });   // start scoring a screen or two ahead so folds are ready on arrival
 
   // Post markup is site-specific; see sites.js.
   const { textOf, handleOf, contextOf } = site;
@@ -196,7 +198,12 @@ import { siteFor } from "./sites";
     const text = textOf(article);
     const ctx = contextOf(article);
     // A photo post with no caption is still judged on its image description.
-    if (!text && !ctx.alt) return;
+    if (!text && !ctx.alt && !article.querySelector("video")) return;
+    if (site.frameOf && settings.thirstVision && !ctx.images?.length) {
+      const f = await site.frameOf(article);
+      if (f) ctx.frame = f;
+      if (!article.isConnected) { seen.delete(article); return; }
+    }
     health.articles++;
     if (ctx.handle) health.handles++;
     if (health.articles % 5 === 0) reportHealth();
@@ -206,6 +213,7 @@ import { siteFor } from "./sites";
     if (known) ctx.profile = known;
     const r = await ask(text, ctx, false);
     if (!r || r.error) { seen.delete(article); return; }
+    r.suggested = !!ctx.suggested;
     accept(article, r, text);
 
     // Local-only results are provisional: try the model again later.
@@ -274,7 +282,7 @@ import { siteFor } from "./sites";
   const keepRage = (r) => ({ rage: r.rage, rageSrc: r.rageSrc, rageHits: r.rageHits, rageNews: r.rageNews, rageReason: r.rageReason, rageFb: r.rageFb });
   // Thirst traps are a third verdict (own 👍 exempts it; slop and rage take precedence).
   const thirstActive = () => settings.thirstMode !== "off" && settings.mode !== "scores";
-  const isThirst = (r) => thirstActive() && typeof r.thirst === "number" && r.thirst >= settings.thirstThreshold && !r.thirstFb?.startsWith?.("not");
+  const isThirst = (r) => thirstActive() && typeof r.thirst === "number" && r.thirst >= settings.thirstThreshold - (r.suggested ? SUGGESTED_BOOST : 0) && !r.thirstFb?.startsWith?.("not");
   const thirstTitle = (r) => "Thirst trap" + (r.thirstReason ? `: ${r.thirstReason}` : " · posted to be looked at");
   // "Not for you": posts you 👎, and posts that closely resemble ones you did. A 👍 exempts a post from everything.
   const tasteActive = () => settings.tasteMode !== "off" && settings.mode !== "scores";
@@ -633,9 +641,10 @@ import { siteFor } from "./sites";
   addEventListener("keydown", (e) => { if (e.key === "Escape") closeWhyAndRefocus(); }, true);
 
   async function init() {
-    const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "tasteMode"]);
+    const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "tasteMode"]);
     if (["fold", "hide", "off"].includes(s.thirstMode)) settings.thirstMode = s.thirstMode;
     if (typeof s.thirstThreshold === "number") settings.thirstThreshold = s.thirstThreshold;
+    settings.thirstVision = s.thirstVision === true;
     if (["fold", "off"].includes(s.tasteMode)) settings.tasteMode = s.tasteMode;
     if (["fold", "hide", "off"].includes(s.rageMode)) settings.rageMode = s.rageMode;
     if (typeof s.rageThreshold === "number") settings.rageThreshold = s.rageThreshold;
@@ -669,6 +678,7 @@ import { siteFor } from "./sites";
       if (ch.rageMode && ["fold", "hide", "off"].includes(ch.rageMode.newValue)) { settings.rageMode = ch.rageMode.newValue; dirty = true; }
       if (ch.tasteMode && ["fold", "off"].includes(ch.tasteMode.newValue)) { settings.tasteMode = ch.tasteMode.newValue; dirty = true; }
       if (ch.thirstMode && ["fold", "hide", "off"].includes(ch.thirstMode.newValue)) { settings.thirstMode = ch.thirstMode.newValue; dirty = true; }
+      if (ch.thirstVision) settings.thirstVision = ch.thirstVision.newValue === true;
       if (ch.thirstThreshold) { settings.thirstThreshold = Number(ch.thirstThreshold.newValue) || 70; dirty = true; }
       if (ch.rageThreshold) { settings.rageThreshold = Number(ch.rageThreshold.newValue) || 70; dirty = true; }
       if (ch.profiles) settings.profiles = site.profiles && ch.profiles.newValue;

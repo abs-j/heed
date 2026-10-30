@@ -348,6 +348,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       ctx.name = handle;
     }
     ctx.verified = !!a.querySelector('svg[aria-label="Verified"]');
+    if (/^Suggested for you$/m.test((a.innerText || "").slice(0, 400))) ctx.suggested = true;
     const posted = a.querySelector("time[datetime]")?.getAttribute("datetime");
     if (posted) ctx.postedAt = posted;
     const code = a.querySelector('a[href*="/p/"], a[href*="/reel/"]')?.getAttribute("href")?.match(/\/(?:p|reel)\/([\w-]+)/)?.[1];
@@ -365,6 +366,31 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     if (media.length) ctx.media = media;
     return ctx;
   }
+  async function igFrame(a) {
+    const v = [...a.querySelectorAll("video")].find((x2) => x2.getBoundingClientRect().height > 0) || a.querySelector("video");
+    if (!v) return void 0;
+    if (v.readyState < 2) {
+      await new Promise((res) => {
+        const t = setTimeout(res, 2500);
+        v.addEventListener("loadeddata", () => {
+          clearTimeout(t);
+          res();
+        }, { once: true });
+      });
+    }
+    if (v.readyState < 2 || !v.videoWidth) return void 0;
+    try {
+      const w = 384, h2 = Math.round(v.videoHeight / v.videoWidth * w) || w;
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h2;
+      c.getContext("2d").drawImage(v, 0, 0, w, h2);
+      const url = c.toDataURL("image/jpeg", 0.6);
+      return url.length > 1e3 ? url : void 0;
+    } catch {
+      return void 0;
+    }
+  }
   var instagram = {
     id: "instagram",
     postSelector: "article",
@@ -374,8 +400,9 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     textOf: igCaption,
     handleOf: igHandle,
     contextOf: igContext,
+    frameOf: igFrame,
     // A photo post with no caption still has an image description worth scoring.
-    hasContent: (a) => igCaption(a).length > 0 || igPhotos(a).some((i) => i.alt),
+    hasContent: (a) => igCaption(a).length > 0 || igPhotos(a).some((i) => i.alt) || !!a.querySelector("video"),
     cellOf: (a) => a,
     // Explore and profile grids: bare thumbnails with an alt text, no caption. Scored on that alone.
     tiles: () => [...document.querySelectorAll('a[href^="/p/"], a[href^="/reel/"]')].filter((t) => !t.closest("article") && t.querySelector("img[alt]")),
@@ -391,7 +418,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
   // src/content/main.js
   (() => {
     const site = siteFor(location.hostname);
-    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, thirstMode: "fold", thirstThreshold: 70, tasteMode: "fold" };
+    const settings = { enabled: true, mode: "blur", sensitivity: 60, profiles: false, acctInfluence: 100, rageMode: "fold", rageThreshold: 70, thirstMode: "fold", thirstThreshold: 70, thirstVision: false, tasteMode: "fold" };
     const BORDER = [35, 75];
     const health = { articles: 0, handles: 0, probes: 0, probesOk: 0, noted: "" };
     function reportHealth() {
@@ -405,6 +432,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         });
       }
     }
+    const SUGGESTED_BOOST = 15;
     const results = /* @__PURE__ */ new Map();
     const seen = /* @__PURE__ */ new WeakSet();
     const MODES = ["blur", "hide", "dim", "badge", "scores"];
@@ -415,7 +443,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
           request(e.target);
         }
       }
-    }, { rootMargin: "300px" });
+    }, { rootMargin: "1200px" });
     const { textOf, handleOf, contextOf } = site;
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const profMem = /* @__PURE__ */ new Map();
@@ -583,7 +611,15 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       }
       const text = textOf(article);
       const ctx = contextOf(article);
-      if (!text && !ctx.alt) return;
+      if (!text && !ctx.alt && !article.querySelector("video")) return;
+      if (site.frameOf && settings.thirstVision && !ctx.images?.length) {
+        const f = await site.frameOf(article);
+        if (f) ctx.frame = f;
+        if (!article.isConnected) {
+          seen.delete(article);
+          return;
+        }
+      }
       health.articles++;
       if (ctx.handle) health.handles++;
       if (health.articles % 5 === 0) reportHealth();
@@ -594,6 +630,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         seen.delete(article);
         return;
       }
+      r.suggested = !!ctx.suggested;
       accept(article, r, text);
       if (r.local) {
         setTimeout(() => {
@@ -659,7 +696,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     const rageTitle = (r) => "Rage bait" + (r.rageReason ? `: ${r.rageReason}` : " \xB7 nothing new in this post");
     const keepRage = (r) => ({ rage: r.rage, rageSrc: r.rageSrc, rageHits: r.rageHits, rageNews: r.rageNews, rageReason: r.rageReason, rageFb: r.rageFb });
     const thirstActive = () => settings.thirstMode !== "off" && settings.mode !== "scores";
-    const isThirst = (r) => thirstActive() && typeof r.thirst === "number" && r.thirst >= settings.thirstThreshold && !r.thirstFb?.startsWith?.("not");
+    const isThirst = (r) => thirstActive() && typeof r.thirst === "number" && r.thirst >= settings.thirstThreshold - (r.suggested ? SUGGESTED_BOOST : 0) && !r.thirstFb?.startsWith?.("not");
     const thirstTitle = (r) => "Thirst trap" + (r.thirstReason ? `: ${r.thirstReason}` : " \xB7 posted to be looked at");
     const tasteActive = () => settings.tasteMode !== "off" && settings.mode !== "scores";
     const topicLess = (r) => !r.reaction && !!r.topic?.less && !r.topic.more;
@@ -1063,9 +1100,10 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       if (e.key === "Escape") closeWhyAndRefocus();
     }, true);
     async function init() {
-      const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "tasteMode"]);
+      const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "tasteMode"]);
       if (["fold", "hide", "off"].includes(s.thirstMode)) settings.thirstMode = s.thirstMode;
       if (typeof s.thirstThreshold === "number") settings.thirstThreshold = s.thirstThreshold;
+      settings.thirstVision = s.thirstVision === true;
       if (["fold", "off"].includes(s.tasteMode)) settings.tasteMode = s.tasteMode;
       if (["fold", "hide", "off"].includes(s.rageMode)) settings.rageMode = s.rageMode;
       if (typeof s.rageThreshold === "number") settings.rageThreshold = s.rageThreshold;
@@ -1118,6 +1156,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
           settings.thirstMode = ch.thirstMode.newValue;
           dirty = true;
         }
+        if (ch.thirstVision) settings.thirstVision = ch.thirstVision.newValue === true;
         if (ch.thirstThreshold) {
           settings.thirstThreshold = Number(ch.thirstThreshold.newValue) || 70;
           dirty = true;

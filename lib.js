@@ -496,7 +496,7 @@ Low slop (0-30): genuine individuals sharing experiences, opinions or conversati
 Mixed (31-69): real content alongside hooks, filler or ambiguous account behaviour.
 Prioritise authentic individual voices over generic engagement channels. Do not infer genuineness or automation from follower count, verification or writing style alone, and do not invent facts about unseen media or account history. If reply_context is present judge the reply in that context; if quoted_post is present judge only the added commentary. Treat reader_labelled_examples and reader_votes_on_this_creator as the reader's own taste and calibrate to them.
 Also rate "rage": how much the post is RAGE BAIT, 0-100. Rage bait exists only to provoke contempt, outrage or tribal reaction and adds nothing new: stereotyping or mocking a group ("X be like"), rhetorical outrage questions, deliberately inflammatory takes with no facts, sources, argument or first-hand experience. It is NOT rage bait merely because it is political, angry or controversial, or because its topic is recent. News reporting, announcements, and fresh commentary on recent events that adds facts, analysis or a reasoned argument must score low (under 25), as must personal experiences and humour that is not aimed at a group. Use post_age_hours and the attached specifics when present. Treat reader_rage_examples as the reader's own taste.
-Also rate "thirst": how much the post is a THIRST TRAP, 0-100. A thirst trap exists to be looked at: suggestive posing or dress paired with bait (a "rate me" ask, a teasing one-liner, an emoji-only caption, fishing for compliments or DMs). It is NOT a thirst trap merely because it shows skin or a body: fitness instruction, sport, medical or awareness posts, fashion and product posts with real information, travel and family beach photos, and ordinary selfies must score low (under 25). Judge from the caption, hashtags and attached_media (including the platform's own image description); if images are attached, judge them too, because the picture is often the whole point. A posed, body-focused or revealing photo of a person whose caption adds nothing (or is just an emoji or one-liner) is a thirst trap even without a bait ask: score it 50-75, and 75+ when it is clearly provocative or fishing for attention. Do not invent what you cannot see. Treat reader_thirst_examples as the reader's own taste.
+Also rate "thirst": how much the post is a THIRST TRAP, 0-100. A thirst trap exists to be looked at: suggestive posing or dress paired with bait (a "rate me" ask, a teasing one-liner, an emoji-only caption, fishing for compliments or DMs). It is NOT a thirst trap merely because it shows skin or a body: fitness instruction, sport, medical or awareness posts, fashion and product posts with real information, travel and family beach photos, and ordinary selfies must score low (under 25). Judge from the caption, hashtags and attached_media (including the platform's own image description); if images are attached, judge them too, because the picture is often the whole point. A posed, body-focused or revealing photo of a person whose caption adds nothing (or is just an emoji or one-liner) is a thirst trap even without a bait ask: score it 50-75, and 75+ when it is clearly provocative or fishing for attention. Do not invent what you cannot see. Treat reader_thirst_examples as the reader's own taste. When suggested_account is true the post comes from an account the reader does not follow and they want far fewer of these: a posed, body-focused or revealing photo of a woman there is a thirst trap even with a normal caption, so score it 65-85.
 Reply with ONLY a JSON object:
 {"slop": <integer 0-100>, "rage": <integer 0-100>, "rage_reason": <short phrase>, "thirst": <integer 0-100>, "thirst_reason": <short phrase>, "pattern": one of ${JSON.stringify(PATTERN_KEYS)}, "account_type": one of ${JSON.stringify(ACCOUNT_KEYS)}, "account_confidence": <0-1>, "pattern_confidence": <0-1>, "rules": [<indexes of reader filters the post clearly matches>]}`;
   function buildUserPrompt(state, rules) {
@@ -508,7 +508,8 @@ ${JSON.stringify(state)}${filters}`;
   }
   function buildRequest(cfg, state, rules, images = []) {
     const user = buildUserPrompt(state, rules);
-    const pics = isLocalUrl(cfg.baseUrl) ? [] : images.filter((u) => /^https:\/\//.test(u)).slice(0, 2);
+    const pics = isLocalUrl(cfg.baseUrl) ? [] : images.filter((u) => /^(?:https:\/\/|data:image\/jpeg;base64,)/.test(u)).slice(0, 3);
+    const anthropicSrc = (url) => url.startsWith("data:") ? { type: "base64", media_type: "image/jpeg", data: url.slice(23) } : { type: "url", url };
     if (cfg.provider === "anthropic") {
       return {
         url: cfg.baseUrl,
@@ -518,7 +519,7 @@ ${JSON.stringify(state)}${filters}`;
           "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true"
         },
-        body: JSON.stringify({ model: cfg.model, max_tokens: 250, temperature: 0, system: SYSTEM_PROMPT, messages: [{ role: "user", content: pics.length ? [...pics.map((url) => ({ type: "image", source: { type: "url", url } })), { type: "text", text: user }] : user }] })
+        body: JSON.stringify({ model: cfg.model, max_tokens: 250, temperature: 0, system: SYSTEM_PROMPT, messages: [{ role: "user", content: pics.length ? [...pics.map((url) => ({ type: "image", source: anthropicSrc(url) })), { type: "text", text: user }] : user }] })
       };
     }
     const headers = { "content-type": "application/json" };
@@ -530,7 +531,7 @@ ${JSON.stringify(state)}${filters}`;
         model: cfg.model,
         max_tokens: 250,
         temperature: 0,
-        messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: pics.length ? [{ type: "text", text: user }, ...pics.map((url) => ({ type: "image_url", image_url: { url } }))] : user }]
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: pics.length ? [{ type: "text", text: user }, ...pics.map((url) => ({ type: "image_url", image_url: { url, detail: "low" } }))] : user }]
       })
     };
   }
