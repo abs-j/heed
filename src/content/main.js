@@ -442,7 +442,7 @@ import { siteFor } from "./sites";
 
   const stateOf = (r, slop) => (slop ? "slop" : r.reaction === "like" ? "ok" : isRage(r) ? "rage" : isThirst(r) ? "thirst" : isLess(r) ? "less" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok");
 
-  function mount(article, r, { strip, folded }) {
+  function mount(article, r, { strip, folded, cover }) {
     const slop = isSlop(r);
     const state = stateOf(r, slop);
     article.dataset.sd = state;
@@ -452,7 +452,7 @@ import { siteFor } from "./sites";
       title: state === "rage" ? rageTitle(r) : state === "thirst" ? thirstTitle(r) : state === "less" ? lessTitle(r) : r.explanation || "",
       handle: strip ? handleOf(article) : undefined,
       signals: state === "rage" ? (r.rageHits || []) : state === "thirst" ? (r.thirstHits || []) : state === "less" ? [topicLess(r) ? r.topic.label : "your taste"] : r.rules?.length ? r.rules : (r.why?.hits || []),
-      details: detailsOf(r), folded, strip,
+      details: detailsOf(r), folded, strip, cover,
       // Scores-only mode and badge mode keep the chip on screen; otherwise it appears on hover.
       chipAlways: settings.mode === "scores" || (settings.mode === "badge" && slop),
       reaction: r.reaction, whyOpen: article.dataset.sdWhy === "1"
@@ -483,7 +483,7 @@ import { siteFor } from "./sites";
     const animate = !site.holdUntilChecked && !stableDepth && Date.now() - lastScroll > 220 && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
     if (animate) article.style.maxHeight = fullHeight + "px";
     article.setAttribute("data-sd-fold", "");
-    mount(article, r, { strip: true, folded: foldThread(article) });
+    mount(article, r, { strip: true, folded: foldThread(article), cover: !!site.holdUntilChecked });
     if (animate) {
       void article.offsetHeight;
       article.style.maxHeight = "";

@@ -17,6 +17,7 @@ export interface View {
   details: [string, string][];   // rows in the "why" popover
   folded: number;                // extra thread posts folded with this one
   strip: boolean;                // show the folded receipt row
+  cover?: boolean;               // the post is blacked out in place (Instagram): the receipt is centred on the cover
   chipAlways: boolean;           // dock visible without hovering
   reaction?: "like" | "dislike";   // the reader's own thumb on this post
   whyOpen: boolean;
@@ -71,6 +72,27 @@ button:focus-visible, .strip:focus-visible { outline: 2px solid var(--c, var(--s
 .strip:hover .peek { color: var(--sd-fg, #0f1419); background: color-mix(in srgb, var(--sd-fg, #000) 8%, transparent); }
 .peek svg { width: 12px; height: 12px; transition: transform .2s ease; }
 .strip:hover .peek svg { transform: translateY(1px); }
+
+/* ---- cover: a blacked-out post keeps its height, so the receipt is centred on a dark panel ---- */
+.cover { --sd-fg: #f4f4f7; --sd-mute: #9d9dad; --sd-bg: #121217; --sd-border: #2c2c36; }
+.cover .meter { display: none; }
+.cover .strip { inset: 50% auto auto 50%; transform: translate(-50%, -54%); width: min(340px, calc(100% - 48px)); height: auto;
+  flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 30px 26px 24px; border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--c) 28%, transparent);
+  background: radial-gradient(130% 90% at 50% 0%, color-mix(in srgb, var(--c) 16%, #17171d), #121217 72%);
+  box-shadow: 0 18px 48px rgba(0,0,0,.45), 0 1px 0 color-mix(in srgb, var(--c) 30%, transparent) inset; }
+.cover .strip:hover { background: radial-gradient(130% 90% at 50% 0%, color-mix(in srgb, var(--c) 22%, #1b1b22), #15151b 72%); }
+.cover .score { min-width: 0; gap: 2px; }
+.cover .score b { font-size: 54px; line-height: 1; }
+.cover .score b.ico svg { width: 40px; height: 40px; }
+.cover .score i { font-size: 11px; margin-top: 6px; }
+.cover .sep { display: none; }
+.cover .info { justify-items: center; gap: 8px; }
+.cover .title { white-space: normal; overflow: visible; font-size: 15px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.cover .sub { justify-content: center; flex-wrap: wrap; white-space: normal; }
+.cover .peek { margin-top: 4px; padding: 9px 20px; font-size: 13px; color: var(--sd-fg);
+  background: color-mix(in srgb, var(--c) 18%, transparent); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); }
+.cover .strip:hover .peek { background: color-mix(in srgb, var(--c) 30%, transparent); }
 
 /* ---- dock ---- */
 .dock { position: absolute; top: 8px; right: 84px; display: none; align-items: center; gap: 2px; padding: 2px;
@@ -160,7 +182,7 @@ export function mountCard(article: HTMLElement, initial: View, act: Actions): Ca
   function draw() {
     const v = view;
     wrap.textContent = "";
-    wrap.className = [`state-${v.state}`, v.strip ? "has-strip" : "", v.chipAlways ? "always" : "", open ? "open" : "", v.whyOpen ? "why-open" : "", "has-dock"].filter(Boolean).join(" ");
+    wrap.className = [`state-${v.state}`, v.strip ? "has-strip" : "", v.cover ? "cover" : "", v.chipAlways ? "always" : "", open ? "open" : "", v.whyOpen ? "why-open" : "", "has-dock"].filter(Boolean).join(" ");
     wrap.style.setProperty("--c", colorOf(v));
     // An open popover must paint above the posts below it.
     host.style.zIndex = v.whyOpen ? "40" : "";

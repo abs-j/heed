@@ -59,8 +59,16 @@ article[data-sd-pending] { opacity: 0.12; pointer-events: none; }   /* opacity, 
    height (a collapse under a moving page is what made it jump). The strip sits on top; a peek
    uncovers the post. */
 html[data-sd-site="instagram"] article[data-sd-fold] {
-  max-height: none !important; overflow: hidden !important; background: #101014 !important; transition: none !important;
+  --sd-accent: #f2545b;
+  max-height: none !important; overflow: hidden !important; transition: none !important; border-radius: 14px;
+  background:
+    repeating-linear-gradient(135deg, rgba(255,255,255,.022) 0 2px, transparent 2px 16px),
+    radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--sd-accent) 13%, #0f0f13), #0c0c10 70%) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sd-accent) 22%, transparent) inset;
 }
+html[data-sd-site="instagram"] article[data-sd="thirst"] { --sd-accent: #e0609e; }
+html[data-sd-site="instagram"] article[data-sd="rage"] { --sd-accent: #f0883e; }
+html[data-sd-site="instagram"] article[data-sd="less"] { --sd-accent: #8fa3c8; }
 html[data-sd-site="instagram"] article[data-sd-fold] > *:not(sd-card) {
   opacity: 0 !important; filter: none !important; transition: none !important; pointer-events: none !important;
 }

@@ -183,4 +183,6 @@ const instagram = {
   }
 };
 
-export const siteFor = (host) => (/(^|\.)instagram\.com$/.test(host) ? instagram : x);
+// ig.localhost is the offline harness (tools/harness/instagram.html served locally); the manifest only
+// injects on x.com and instagram.com, so this never matches on a real site.
+export const siteFor = (host) => (/(^|\.)instagram\.com$|^ig\.localhost$/.test(host) ? instagram : x);

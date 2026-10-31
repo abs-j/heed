@@ -43,6 +43,27 @@ button:focus-visible, .strip:focus-visible { outline: 2px solid var(--c, var(--s
 .peek svg { width: 12px; height: 12px; transition: transform .2s ease; }
 .strip:hover .peek svg { transform: translateY(1px); }
 
+/* ---- cover: a blacked-out post keeps its height, so the receipt is centred on a dark panel ---- */
+.cover { --sd-fg: #f4f4f7; --sd-mute: #9d9dad; --sd-bg: #121217; --sd-border: #2c2c36; }
+.cover .meter { display: none; }
+.cover .strip { inset: 50% auto auto 50%; transform: translate(-50%, -54%); width: min(340px, calc(100% - 48px)); height: auto;
+  flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 30px 26px 24px; border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--c) 28%, transparent);
+  background: radial-gradient(130% 90% at 50% 0%, color-mix(in srgb, var(--c) 16%, #17171d), #121217 72%);
+  box-shadow: 0 18px 48px rgba(0,0,0,.45), 0 1px 0 color-mix(in srgb, var(--c) 30%, transparent) inset; }
+.cover .strip:hover { background: radial-gradient(130% 90% at 50% 0%, color-mix(in srgb, var(--c) 22%, #1b1b22), #15151b 72%); }
+.cover .score { min-width: 0; gap: 2px; }
+.cover .score b { font-size: 54px; line-height: 1; }
+.cover .score b.ico svg { width: 40px; height: 40px; }
+.cover .score i { font-size: 11px; margin-top: 6px; }
+.cover .sep { display: none; }
+.cover .info { justify-items: center; gap: 8px; }
+.cover .title { white-space: normal; overflow: visible; font-size: 15px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.cover .sub { justify-content: center; flex-wrap: wrap; white-space: normal; }
+.cover .peek { margin-top: 4px; padding: 9px 20px; font-size: 13px; color: var(--sd-fg);
+  background: color-mix(in srgb, var(--c) 18%, transparent); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); }
+.cover .strip:hover .peek { background: color-mix(in srgb, var(--c) 30%, transparent); }
+
 /* ---- dock ---- */
 .dock { position: absolute; top: 8px; right: 84px; display: none; align-items: center; gap: 2px; padding: 2px;
   border-radius: 999px; pointer-events: auto; transform: translateY(-2px);
@@ -127,7 +148,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     function draw() {
       const v = view;
       wrap.textContent = "";
-      wrap.className = [`state-${v.state}`, v.strip ? "has-strip" : "", v.chipAlways ? "always" : "", open ? "open" : "", v.whyOpen ? "why-open" : "", "has-dock"].filter(Boolean).join(" ");
+      wrap.className = [`state-${v.state}`, v.strip ? "has-strip" : "", v.cover ? "cover" : "", v.chipAlways ? "always" : "", open ? "open" : "", v.whyOpen ? "why-open" : "", "has-dock"].filter(Boolean).join(" ");
       wrap.style.setProperty("--c", colorOf(v));
       host.style.zIndex = v.whyOpen ? "40" : "";
       const meterBar = h("div", "meter");
@@ -417,7 +438,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       return { text: "", ctx: { platform: "instagram", postId: code ? "ig_" + code : void 0, alt, localOnly: true } };
     }
   };
-  var siteFor = (host) => /(^|\.)instagram\.com$/.test(host) ? instagram : x;
+  var siteFor = (host) => /(^|\.)instagram\.com$|^ig\.localhost$/.test(host) ? instagram : x;
 
   // src/content/main.js
   (() => {
@@ -869,7 +890,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       mount(article, r, { strip: false, folded: 0 });
     }
     const stateOf = (r, slop) => slop ? "slop" : r.reaction === "like" ? "ok" : isRage(r) ? "rage" : isThirst(r) ? "thirst" : isLess(r) ? "less" : r.score >= settings.sensitivity - BORDER_BAND ? "border" : "ok";
-    function mount(article, r, { strip, folded }) {
+    function mount(article, r, { strip, folded, cover }) {
       const slop = isSlop(r);
       const state = stateOf(r, slop);
       article.dataset.sd = state;
@@ -883,6 +904,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         details: detailsOf(r),
         folded,
         strip,
+        cover,
         // Scores-only mode and badge mode keep the chip on screen; otherwise it appears on hover.
         chipAlways: settings.mode === "scores" || settings.mode === "badge" && slop,
         reaction: r.reaction,
@@ -908,7 +930,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       const animate = !site.holdUntilChecked && !stableDepth && Date.now() - lastScroll > 220 && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
       if (animate) article.style.maxHeight = fullHeight + "px";
       article.setAttribute("data-sd-fold", "");
-      mount(article, r, { strip: true, folded: foldThread(article) });
+      mount(article, r, { strip: true, folded: foldThread(article), cover: !!site.holdUntilChecked });
       if (animate) {
         void article.offsetHeight;
         article.style.maxHeight = "";
