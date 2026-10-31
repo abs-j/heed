@@ -46,7 +46,7 @@ button:focus-visible, .strip:focus-visible { outline: 2px solid var(--c, var(--s
 .state-ok .meter { display: none; }
 
 /* ---- folded receipt ---- */
-.strip { position: absolute; inset: 6px 12px 6px 12px; display: none; align-items: center; gap: 14px;
+.strip { position: absolute; inset: 6px 12px auto 12px; height: 52px; box-sizing: border-box; display: none; align-items: center; gap: 14px;
   padding: 0 14px 0 16px; border-radius: 12px; pointer-events: auto; cursor: pointer;
   border: 1px solid color-mix(in srgb, var(--c) 35%, var(--sd-border, #cfd9de));
   background: color-mix(in srgb, var(--c) 7%, var(--sd-bg, #fff));

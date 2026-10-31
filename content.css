@@ -54,3 +54,16 @@ a[data-sd-tile="hide"] { display: none !important; }
 /* Instagram posts waiting for their verdict stay in place but faded, so a wait reads as
    "loading" rather than as a hole in the feed (see PENDING_MAX_MS). */
 article[data-sd-pending] { opacity: 0.12; pointer-events: none; }   /* opacity, not blur: a blur on full-size video is costly while scrolling */
+
+/* Instagram: a folded post is blacked out in place instead of collapsed, so the feed never changes
+   height (a collapse under a moving page is what made it jump). The strip sits on top; a peek
+   uncovers the post. */
+html[data-sd-site="instagram"] article[data-sd-fold] {
+  max-height: none !important; overflow: hidden !important; background: #101014 !important; transition: none !important;
+}
+html[data-sd-site="instagram"] article[data-sd-fold] > *:not(sd-card) {
+  opacity: 0 !important; filter: none !important; transition: none !important; pointer-events: none !important;
+}
+html[data-sd-site="instagram"] article[data-sd-fold][data-sd-open] > *:not(sd-card) {
+  opacity: 1 !important; pointer-events: auto !important;
+}

@@ -213,12 +213,6 @@ import { siteFor } from "./sites";
     // A fold on screen or above it moves everything below it up, and the browser shifts the scroll
     // position to compensate. Mid-scroll that is what makes the feed jump, so only posts still
     // below the screen fold during a scroll; the rest wait until it has settled.
-    if (site.holdUntilChecked && Date.now() - lastScroll < SCROLL_IDLE_MS && article.getBoundingClientRect().top < innerHeight) {
-      deferred.add(article);
-      clearTimeout(flushTimer);
-      flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS);
-      return;
-    }
     if (site.holdUntilChecked && article.getBoundingClientRect().top < innerHeight) stable(() => render(article));
     else render(article);
   }
@@ -270,16 +264,6 @@ import { siteFor } from "./sites";
         stable(() => { known.score = scoreOf(known); results.set(a, known); render(a); });
       } else hold(a);
     }
-  }
-
-  const SCROLL_IDLE_MS = 220;
-  const deferred = new Set();
-  let flushTimer = 0;
-  function flushDeferred() {
-    if (Date.now() - lastScroll < SCROLL_IDLE_MS) { flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS); return; }
-    const batch = [...deferred];
-    deferred.clear();
-    stable(() => { for (const a of batch) if (a.isConnected && results.has(a)) render(a); });
   }
 
   async function ask(text, ctx, refine) {
@@ -496,7 +480,7 @@ import { siteFor } from "./sites";
     // Start the transition from the post's current height so it glides shut.
     // Not mid-scroll (a gliding height change under a moving page is what jumps); on Instagram folds
     // are held back until the scroll settles, so a post on screen then closes smoothly.
-    const animate = !stableDepth && Date.now() - lastScroll > 220 && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
+    const animate = !site.holdUntilChecked && !stableDepth && Date.now() - lastScroll > 220 && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
     if (animate) article.style.maxHeight = fullHeight + "px";
     article.setAttribute("data-sd-fold", "");
     mount(article, r, { strip: true, folded: foldThread(article) });
@@ -512,7 +496,21 @@ import { siteFor } from "./sites";
       article.style.maxHeight = "none";
       article.style.overflow = "visible";
     }
+    if (site.holdUntilChecked) silence(article);
     bindHover(article);
+  }
+
+  // A blacked-out Instagram post keeps its size, so its video would still count as on screen and
+  // could play sound under the cover. Folded videos are kept muted and paused.
+  function silence(article) {
+    for (const v of article.querySelectorAll("video")) {
+      v.muted = true;
+      v.pause();
+      if (!v._sdSilenced) {
+        v._sdSilenced = true;
+        v.addEventListener("play", () => { if (v.closest("article")?.hasAttribute("data-sd-fold") && !v.closest("article").hasAttribute("data-sd-open")) { v.muted = true; v.pause(); } });
+      }
+    }
   }
 
   // Pointer position is tracked directly so a post always closes once the

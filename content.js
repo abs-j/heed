@@ -17,7 +17,7 @@ button:focus-visible, .strip:focus-visible { outline: 2px solid var(--c, var(--s
 .state-ok .meter { display: none; }
 
 /* ---- folded receipt ---- */
-.strip { position: absolute; inset: 6px 12px 6px 12px; display: none; align-items: center; gap: 14px;
+.strip { position: absolute; inset: 6px 12px auto 12px; height: 52px; box-sizing: border-box; display: none; align-items: center; gap: 14px;
   padding: 0 14px 0 16px; border-radius: 12px; pointer-events: auto; cursor: pointer;
   border: 1px solid color-mix(in srgb, var(--c) 35%, var(--sd-border, #cfd9de));
   background: color-mix(in srgb, var(--c) 7%, var(--sd-bg, #fff));
@@ -617,12 +617,6 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       r.score = scoreOf(r);
       results.set(article, r);
       article.removeAttribute("data-sd-pending");
-      if (site.holdUntilChecked && Date.now() - lastScroll < SCROLL_IDLE_MS && article.getBoundingClientRect().top < innerHeight) {
-        deferred.add(article);
-        clearTimeout(flushTimer);
-        flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS);
-        return;
-      }
       if (site.holdUntilChecked && article.getBoundingClientRect().top < innerHeight) stable(() => render(article));
       else render(article);
     }
@@ -681,20 +675,6 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
           });
         } else hold(a);
       }
-    }
-    const SCROLL_IDLE_MS = 220;
-    const deferred = /* @__PURE__ */ new Set();
-    let flushTimer = 0;
-    function flushDeferred() {
-      if (Date.now() - lastScroll < SCROLL_IDLE_MS) {
-        flushTimer = setTimeout(flushDeferred, SCROLL_IDLE_MS);
-        return;
-      }
-      const batch = [...deferred];
-      deferred.clear();
-      stable(() => {
-        for (const a of batch) if (a.isConnected && results.has(a)) render(a);
-      });
     }
     async function ask(text, ctx, refine) {
       try {
@@ -925,7 +905,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       lastScroll = Date.now();
     }, { passive: true, capture: true });
     function collapse(article, r, { wasCollapsed, wasOpen, fullHeight }) {
-      const animate = !stableDepth && Date.now() - lastScroll > 220 && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
+      const animate = !site.holdUntilChecked && !stableDepth && Date.now() - lastScroll > 220 && !wasCollapsed && !reduceMotion && fullHeight > 90 && article.getBoundingClientRect().bottom > 0;
       if (animate) article.style.maxHeight = fullHeight + "px";
       article.setAttribute("data-sd-fold", "");
       mount(article, r, { strip: true, folded: foldThread(article) });
@@ -941,7 +921,23 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         article.style.maxHeight = "none";
         article.style.overflow = "visible";
       }
+      if (site.holdUntilChecked) silence(article);
       bindHover(article);
+    }
+    function silence(article) {
+      for (const v of article.querySelectorAll("video")) {
+        v.muted = true;
+        v.pause();
+        if (!v._sdSilenced) {
+          v._sdSilenced = true;
+          v.addEventListener("play", () => {
+            if (v.closest("article")?.hasAttribute("data-sd-fold") && !v.closest("article").hasAttribute("data-sd-open")) {
+              v.muted = true;
+              v.pause();
+            }
+          });
+        }
+      }
     }
     let px = -1, py = -1;
     addEventListener("pointermove", (e) => {
