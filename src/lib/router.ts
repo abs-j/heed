@@ -10,7 +10,8 @@ export interface TierOptions {
   thirst?: { on: boolean; score: number; vision?: boolean };
 }
 export const RAGE_SURE = { low: 25, high: 85 };
-export const TIER_DEFAULTS = { mode: "tiered" as TierMode, low: 20, high: 90 };
+// Default: ask the model about every post (the reader's own setting). Tiered and local-only stay one click away.
+export const TIER_DEFAULTS = { mode: "llm" as TierMode, low: 20, high: 90 };
 
 export type Route = { use: "local"; reason: "no-llm" | "local-only" | "confident-ok" | "confident-slop" } | { use: "llm" };
 

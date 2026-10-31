@@ -40,7 +40,7 @@ async function load() {
   $("igShowFollowed").checked = s.igShowFollowed !== false;
   const prov = PROV[s.provider] ? s.provider : "jev";
   $("provider").value = prov;
-  $("tierMode").value = s.tierMode || "tiered";
+  $("tierMode").value = s.tierMode || "llm";
   state = { keys: s.providerKeys || {}, jev: s.apiKey || "", prov,
     models: prov !== "jev" && s.providerModel ? { [prov]: s.providerModel } : {},
     bases: prov !== "jev" && s.providerBase ? { [prov]: s.providerBase } : {} };

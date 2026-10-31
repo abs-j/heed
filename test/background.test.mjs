@@ -31,7 +31,7 @@ const MIDDLE = "Interesting take on where the housing market goes next, curious 
 
 test("tiered: confident local posts skip the API, uncertain ones call the provider", async () => {
   calls.length = 0;
-  const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" } }, anth({ slop: 55, pattern: "low_effort", account_type: "personal_individual", account_confidence: 0.9, pattern_confidence: 0.6 }));
+  const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" }, tierMode: "tiered" }, anth({ slop: 55, pattern: "low_effort", account_type: "personal_individual", account_confidence: 0.9, pattern_confidence: 0.6 }));
   const a = await send({ type: "analyze", text: BAIT, ctx: { postId: "1" } });
   assert.equal(a.tier, "local"); assert.ok(a.score >= 60);
   const b = await send({ type: "analyze", text: PERSONAL, ctx: { postId: "2" } });
@@ -245,4 +245,11 @@ test("provider requests carry a timeout signal so a hung call cannot hold a queu
   const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" }, tierMode: "llm" }, reply({ slop: 50 }));
   await send({ type: "analyze", text: "A reasonably long post that the model has to look at properly, thoughts?", ctx: { postId: "t1" } });
   assert.ok(calls[0][1].signal instanceof AbortSignal);
+});
+
+test("engine default is the model for every post; tiered is opt-in", async () => {
+  calls.length = 0;
+  const send = boot({ provider: "anthropic", providerKeys: { anthropic: "k" } }, reply({ slop: 50 }));
+  await send({ type: "analyze", text: PERSONAL, ctx: { postId: "d1" } });
+  assert.equal(calls.length, 1, "a clear-cut post still goes to the model by default");
 });

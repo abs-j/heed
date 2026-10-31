@@ -589,7 +589,7 @@ ${JSON.stringify(state)}${filters}`;
     route: () => route
   });
   var RAGE_SURE = { low: 25, high: 85 };
-  var TIER_DEFAULTS = { mode: "tiered", low: 20, high: 90 };
+  var TIER_DEFAULTS = { mode: "llm", low: 20, high: 90 };
   function route(localScore2, o) {
     if (!o.llmReady) return { use: "local", reason: "no-llm" };
     if (o.mode === "local") return { use: "local", reason: "local-only" };

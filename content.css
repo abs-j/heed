@@ -51,9 +51,20 @@ a[data-sd-tile]:hover img, a[data-sd-tile]:focus-visible img { filter: none; }
 a[data-sd-tile="hide"] { display: none !important; }
 @media (prefers-reduced-motion: reduce) { a[data-sd-tile] img { transition: none !important; } }
 
-/* Instagram posts waiting for their verdict stay in place but faded, so a wait reads as
-   "loading" rather than as a hole in the feed (see PENDING_MAX_MS). */
-article[data-sd-pending] { opacity: 0.12; pointer-events: none; }   /* opacity, not blur: a blur on full-size video is costly while scrolling */
+/* Instagram posts waiting for their verdict: an opaque frosted panel with a slow shimmer, so the post
+   is not visible but the wait reads as "processing" (see PENDING_MAX_MS). Plain gradients, no blur
+   filter: a real blur on full-size video is costly while scrolling. */
+html[data-sd-site="instagram"] article[data-sd-pending] {
+  pointer-events: none; overflow: hidden; border-radius: 14px;
+  background:
+    radial-gradient(60% 40% at 25% 20%, rgba(150,160,200,.16), transparent 70%),
+    radial-gradient(55% 40% at 78% 72%, rgba(190,150,210,.12), transparent 70%),
+    linear-gradient(110deg, #101016 30%, #191923 48%, #101016 66%) 0 0 / 220% 100%;
+  animation: sd-shimmer 2.4s ease-in-out infinite;
+}
+html[data-sd-site="instagram"] article[data-sd-pending] > * { opacity: 0 !important; }
+@keyframes sd-shimmer { from { background-position: 0 0, 0 0, 100% 0; } to { background-position: 0 0, 0 0, -100% 0; } }
+@media (prefers-reduced-motion: reduce) { html[data-sd-site="instagram"] article[data-sd-pending] { animation: none; } }
 
 /* Instagram: a folded post is blacked out in place instead of collapsed, so the feed never changes
    height (a collapse under a moving page is what made it jump). The strip sits on top; a peek

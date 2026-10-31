@@ -371,8 +371,9 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     ctx.verified = !!a.querySelector('svg[aria-label="Verified"]');
     const top = (a.innerText || "").slice(0, 400);
     if (/^Suggested for you$/m.test(top)) ctx.suggested = true;
-    const reel = !!a.querySelector('a[href^="/reels/"], video');
-    if (!ctx.suggested && !reel && !/^(?:Ad|Sponsored)$/m.test(top)) ctx.followed = true;
+    const ad = /^(?:Ad|Sponsored)$/m.test(top) || !!a.querySelector('a[href*="/ads/"]');
+    const followBtn = [...a.querySelectorAll('[role="button"], button')].some((b) => b.textContent.trim() === "Follow");
+    if (!ctx.suggested && !ad && !followBtn) ctx.followed = true;
     const posted = a.querySelector("time[datetime]")?.getAttribute("datetime");
     if (posted) ctx.postedAt = posted;
     const code = a.querySelector('a[href*="/p/"], a[href*="/reel/"]')?.getAttribute("href")?.match(/\/(?:p|reel)\/([\w-]+)/)?.[1];
@@ -459,6 +460,27 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
     }
     const SUGGESTED_BOOST = 15;
     const results = /* @__PURE__ */ new Map();
+    const followedHandles = /* @__PURE__ */ new Set();
+    let followedDirty = false;
+    const isFollowed = (ctx) => settings.igShowFollowed && !!(ctx.followed || ctx.handle && followedHandles.has(ctx.handle.toLowerCase()));
+    function harvestFollowing() {
+      if (site.id !== "x" || location.pathname !== "/home") return;
+      const tab = document.querySelector('[role="tab"][aria-selected="true"]');
+      if (!/^following$/i.test(tab?.textContent.trim() || "")) return;
+      for (const a of document.querySelectorAll(site.postSelector)) {
+        if (a.querySelector('[data-testid="socialContext"]')) continue;
+        const h2 = handleOf(a)?.toLowerCase();
+        if (h2 && !followedHandles.has(h2)) {
+          followedHandles.add(h2);
+          followedDirty = true;
+        }
+      }
+      if (followedDirty) {
+        followedDirty = false;
+        chrome.storage.local.set({ sdFollowed: [...followedHandles].slice(-4e3) }).catch(() => {
+        });
+      }
+    }
     const seen = /* @__PURE__ */ new WeakSet();
     const MODES = ["blur", "hide", "dim", "badge", "scores"];
     const io = new IntersectionObserver((entries) => {
@@ -591,7 +613,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
         if (!site.hasContent(a)) return;
         seen.add(a);
         const c = site.holdUntilChecked && contextOf(a);
-        if (c && !(c.followed && settings.igShowFollowed)) hold(a);
+        if (c && !isFollowed(c)) hold(a);
         io.observe(a);
       });
       scanTiles();
@@ -685,7 +707,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       for (const a of fresh) {
         if (seen.has(a) || a.hasAttribute("data-sd") || !site.hasContent(a)) continue;
         const c = contextOf(a);
-        if (c.followed && settings.igShowFollowed) continue;
+        if (isFollowed(c)) continue;
         const known = c.postId && byPost.get(c.postId);
         if (known) {
           seen.add(a);
@@ -719,7 +741,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       }
       const text = textOf(article);
       const ctx = contextOf(article);
-      if (ctx.followed && settings.igShowFollowed) {
+      if (isFollowed(ctx)) {
         article.dataset.sd = "ok";
         return;
       }
@@ -1230,7 +1252,8 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
       if (e.key === "Escape") closeWhyAndRefocus();
     }, true);
     async function init() {
-      const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "igShowFollowed", "tasteMode"]);
+      const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "igShowFollowed", "tasteMode", "sdFollowed"]);
+      for (const h2 of s.sdFollowed || []) followedHandles.add(h2);
       if (["fold", "hide", "off"].includes(s.thirstMode)) settings.thirstMode = s.thirstMode;
       if (typeof s.thirstThreshold === "number") settings.thirstThreshold = s.thirstThreshold;
       settings.thirstVision = s.thirstVision === true;
@@ -1259,6 +1282,7 @@ kbd { font: 600 10px ui-monospace, Menlo, monospace; padding: 1px 4px; border-ra
           }
           scan();
           harvestProfilePage();
+          harvestFollowing();
         }, 150);
       }).observe(document.body, { childList: true, subtree: true });
       chrome.storage.onChanged.addListener((ch, area) => {

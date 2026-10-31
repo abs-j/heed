@@ -26,6 +26,26 @@ import { siteFor } from "./sites";
   // Posts from accounts the reader does not follow fold at a lower thirst score.
   const SUGGESTED_BOOST = 15;
   const results = new Map();   // article -> result
+
+  // Accounts the reader follows are left alone. Instagram says so in the post itself (see sites.js);
+  // X does not, so handles seen on the Following tab are remembered and matched in For you.
+  const followedHandles = new Set();
+  let followedDirty = false;
+  const isFollowed = (ctx) => settings.igShowFollowed && !!(ctx.followed || (ctx.handle && followedHandles.has(ctx.handle.toLowerCase())));
+  function harvestFollowing() {
+    if (site.id !== "x" || location.pathname !== "/home") return;
+    const tab = document.querySelector('[role="tab"][aria-selected="true"]');
+    if (!/^following$/i.test(tab?.textContent.trim() || "")) return;
+    for (const a of document.querySelectorAll(site.postSelector)) {
+      if (a.querySelector('[data-testid="socialContext"]')) continue;   // a repost or pin: the author may not be followed
+      const h = handleOf(a)?.toLowerCase();
+      if (h && !followedHandles.has(h)) { followedHandles.add(h); followedDirty = true; }
+    }
+    if (followedDirty) {
+      followedDirty = false;
+      chrome.storage.local.set({ sdFollowed: [...followedHandles].slice(-4000) }).catch(() => {});
+    }
+  }
   const seen = new WeakSet();
   const MODES = ["blur", "hide", "dim", "badge", "scores"];
   const io = new IntersectionObserver((entries) => {
@@ -157,7 +177,7 @@ import { siteFor } from "./sites";
       if (!site.hasContent(a)) return;
       seen.add(a);
       const c = site.holdUntilChecked && contextOf(a);
-      if (c && !(c.followed && settings.igShowFollowed)) hold(a);
+      if (c && !isFollowed(c)) hold(a);
       io.observe(a);
     });
     scanTiles();
@@ -257,7 +277,7 @@ import { siteFor } from "./sites";
     for (const a of fresh) {
       if (seen.has(a) || a.hasAttribute("data-sd") || !site.hasContent(a)) continue;
       const c = contextOf(a);
-      if (c.followed && settings.igShowFollowed) continue;
+      if (isFollowed(c)) continue;
       const known = c.postId && byPost.get(c.postId);
       if (known) {
         seen.add(a);
@@ -285,7 +305,7 @@ import { siteFor } from "./sites";
     const text = textOf(article);
     const ctx = contextOf(article);
     // Accounts the reader follows are left alone; only suggested posts, ads and reels are checked.
-    if (ctx.followed && settings.igShowFollowed) { article.dataset.sd = "ok"; return; }
+    if (isFollowed(ctx)) { article.dataset.sd = "ok"; return; }
     // A photo post with no caption is still judged on its image description.
     if (!text && !ctx.alt && !article.querySelector("video")) return;
     hold(article);
@@ -747,7 +767,8 @@ import { siteFor } from "./sites";
   addEventListener("keydown", (e) => { if (e.key === "Escape") closeWhyAndRefocus(); }, true);
 
   async function init() {
-    const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "igShowFollowed", "tasteMode"]);
+    const s = await chrome.storage.local.get(["enabled", "mode", "sensitivity", "profiles", "acctInfluence", "rageMode", "rageThreshold", "thirstMode", "thirstThreshold", "thirstVision", "igShowFollowed", "tasteMode", "sdFollowed"]);
+    for (const h of s.sdFollowed || []) followedHandles.add(h);
     if (["fold", "hide", "off"].includes(s.thirstMode)) settings.thirstMode = s.thirstMode;
     if (typeof s.thirstThreshold === "number") settings.thirstThreshold = s.thirstThreshold;
     settings.thirstVision = s.thirstVision === true;
@@ -773,7 +794,7 @@ import { siteFor } from "./sites";
       clearTimeout(t);
       t = setTimeout(() => {
         if (Date.now() - themeAt > 3000) { themeAt = Date.now(); applyTheme(); }
-        scan(); harvestProfilePage();
+        scan(); harvestProfilePage(); harvestFollowing();
       }, 150);
     })
       .observe(document.body, { childList: true, subtree: true });

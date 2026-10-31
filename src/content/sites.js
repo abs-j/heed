@@ -116,10 +116,12 @@ function igContext(a) {
   // "Suggested for you" sits under the name of accounts the reader does not follow.
   const top = (a.innerText || "").slice(0, 400);
   if (/^Suggested for you$/m.test(top)) ctx.suggested = true;
-  // A followed account's photo or carousel post: not suggested, not an ad, not a reel (reels and
-  // video posts link to /reels/<code>/ and carry a <video>).
-  const reel = !!a.querySelector('a[href^="/reels/"], video');
-  if (!ctx.suggested && !reel && !/^(?:Ad|Sponsored)$/m.test(top)) ctx.followed = true;
+  // A followed account's post, photo or reel: no "Suggested for you" label, not an ad (sponsored
+  // posts link out through /ads/ and are labelled), and no "Follow" button in its header (accounts
+  // the reader does not follow get one, even on ordinary reels).
+  const ad = /^(?:Ad|Sponsored)$/m.test(top) || !!a.querySelector('a[href*="/ads/"]');
+  const followBtn = [...a.querySelectorAll('[role="button"], button')].some((b) => b.textContent.trim() === "Follow");
+  if (!ctx.suggested && !ad && !followBtn) ctx.followed = true;
   const posted = a.querySelector("time[datetime]")?.getAttribute("datetime");
   if (posted) ctx.postedAt = posted;
   const code = a.querySelector('a[href*="/p/"], a[href*="/reel/"]')?.getAttribute("href")?.match(/\/(?:p|reel)\/([\w-]+)/)?.[1];
